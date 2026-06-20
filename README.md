@@ -92,6 +92,13 @@ npm test
 
 After deploying, call the function's URL (with its function key) to post to Discord.
 
+### Deploy with GitHub Actions
+
+A manual-trigger workflow ([`.github/workflows/deploy.yml`](.github/workflows/deploy.yml))
+can deploy the function from the **Actions** tab. See
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the GitHub secrets and variables
+you need to configure to deploy to your Azure subscription.
+
 ## Configuration
 
 | Setting               | Description                                  |
