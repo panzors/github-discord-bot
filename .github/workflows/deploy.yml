@@ -19,6 +19,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Verify secrets are accessible
+        run: |
+          if [ -z "${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}" ]; then
+            echo "ERROR: AZURE_FUNCTIONAPP_PUBLISH_PROFILE secret is not set"
+            exit 1
+          fi
+          if [ -z "${{ vars.AZURE_FUNCTIONAPP_NAME }}" ]; then
+            echo "ERROR: AZURE_FUNCTIONAPP_NAME variable is not set"
+            exit 1
+          fi
+          echo "✓ All required secrets and variables are present"
+          
       - name: Set up Node.js ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v4
         with:
