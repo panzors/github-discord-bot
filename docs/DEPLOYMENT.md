@@ -4,6 +4,15 @@ This repository includes a workflow at
 [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) that deploys the
 Azure Function to your Azure subscription.
 
+Authentication uses **OpenID Connect (OIDC)** with an Azure service principal and
+Azure RBAC — there are no long-lived deployment credentials stored in GitHub.
+
+> **Why not a publish profile?** Publish-profile deployment relies on SCM
+> **basic authentication**, which Azure now disables by default on new Function
+> Apps (and many policies disable it org-wide). When basic auth is off, the
+> publish profile stops working. OIDC + RBAC is the recommended replacement and
+> does not depend on basic auth.
+
 ## How it's triggered
 
 The workflow runs **on manual trigger only** (`workflow_dispatch`). To deploy:
@@ -18,8 +27,10 @@ It will not run on push, pull request, or any schedule — only when you start i
 
 1. Checks out the repo and sets up Node.js 22.
 2. Installs dependencies (`npm ci`) and runs the tests (`npm test`).
-3. Deploys to your Function App using
-   [`Azure/functions-action`](https://github.com/Azure/functions-action).
+3. Logs in to Azure with [`azure/login`](https://github.com/Azure/login) using OIDC.
+4. Deploys to your Function App using
+   [`Azure/functions-action`](https://github.com/Azure/functions-action) over the
+   authenticated Azure session.
 
 ## Prerequisites in Azure
 
@@ -37,18 +48,62 @@ az functionapp create \
   --storage-account <storage-account>
 ```
 
+## Set up OIDC (one time)
+
+Create an app registration, give it permission to deploy, and add a federated
+credential that trusts this repository's `production` environment.
+
+```bash
+# 1. Create the app registration and capture its client (app) id.
+appId=$(az ad app create --display-name "github-discord-bot-deploy" --query appId -o tsv)
+
+# 2. Create a service principal for the app.
+az ad sp create --id "$appId"
+
+# 3. Grant it Contributor on the Function App's resource group.
+subId=$(az account show --query id -o tsv)
+az role assignment create \
+  --assignee "$appId" \
+  --role Contributor \
+  --scope "/subscriptions/$subId/resourceGroups/<resource-group>"
+
+# 4. Add a federated credential trusting this repo's "production" environment.
+#    The subject MUST match how the workflow runs. Because the deploy job sets
+#    `environment: production`, the subject is the environment form below.
+az ad app federated-credential create --id "$appId" --parameters '{
+  "name": "github-deploy-production",
+  "issuer": "https://token.actions.githubusercontent.com",
+  "subject": "repo:panzors/github-discord-bot:environment:production",
+  "audiences": ["api://AzureADTokenExchange"]
+}'
+
+# Print the values you need for GitHub secrets:
+echo "AZURE_CLIENT_ID=$appId"
+echo "AZURE_TENANT_ID=$(az account show --query tenantId -o tsv)"
+echo "AZURE_SUBSCRIPTION_ID=$subId"
+```
+
+> The federated `subject` must match the workflow exactly. The deploy job
+> declares `environment: production`, so GitHub's OIDC token subject is
+> `repo:<owner>/<repo>:environment:production`. If you remove that
+> `environment:` line, switch the subject to a branch form such as
+> `repo:<owner>/<repo>:ref:refs/heads/main`.
+
 ## Required GitHub configuration
 
 Add these under **Settings → Secrets and variables → Actions** in the repository.
 
-### Secret
+### Secrets
 
-| Name                                | Type   | Where to get it |
-| ----------------------------------- | ------ | --------------- |
-| `AZURE_FUNCTIONAPP_PUBLISH_PROFILE` | Secret | Azure Portal → your Function App → **Overview** → **Get publish profile** (downloads an XML file). Open it and paste the **entire XML contents** as the secret value. |
+| Name                    | Type   | Value |
+| ----------------------- | ------ | ----- |
+| `AZURE_CLIENT_ID`       | Secret | The app registration (client) ID from step 1 above. |
+| `AZURE_TENANT_ID`       | Secret | Your Azure AD (Entra) tenant ID. |
+| `AZURE_SUBSCRIPTION_ID` | Secret | The subscription ID containing the Function App. |
 
-> The publish profile contains deployment credentials, so it must be a
-> **secret**, never a variable, and never committed to the repo.
+> These three values are not themselves sensitive, but storing them as secrets
+> is the convention `azure/login` documents. No client secret or publish profile
+> is stored — OIDC mints a short-lived token per run.
 
 ### Variable
 
@@ -96,24 +151,34 @@ variables → App settings**.)
 
 ## Summary of what you need to add
 
-- **GitHub secret:** `AZURE_FUNCTIONAPP_PUBLISH_PROFILE`
+- **GitHub secrets:** `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`
 - **GitHub variable:** `AZURE_FUNCTIONAPP_NAME`
 - **Azure app settings:** `DISCORD_WEBHOOK_URL`, `TARGET_GITHUB_TOKEN`,
   `TARGET_REPO_URL`, `TARGET_WORKFLOW_FILE`, `TARGET_WORKFLOW_REF`
 
-## Alternative: OIDC / service principal authentication
+## Alternative: service principal with a client secret
 
-If you prefer not to use a publish profile, you can authenticate with a service
-principal via OpenID Connect. Add `azure/login@v2` before the deploy step and
-configure these secrets instead of the publish profile:
+If you can't use OIDC, you can authenticate with a service principal **client
+secret** instead. Create one and store the JSON as a single `AZURE_CREDENTIALS`
+secret:
 
-| Name                    | Description |
-| ----------------------- | ----------- |
-| `AZURE_CLIENT_ID`       | App registration (client) ID with a federated credential for this repo. |
-| `AZURE_TENANT_ID`       | Your Azure AD tenant ID. |
-| `AZURE_SUBSCRIPTION_ID` | The target subscription ID. |
+```bash
+az ad sp create-for-rbac \
+  --name "github-discord-bot-deploy" \
+  --role Contributor \
+  --scopes "/subscriptions/<sub-id>/resourceGroups/<resource-group>" \
+  --json-auth
+```
 
-With OIDC you also need `permissions: id-token: write` on the job and you omit
-the `publish-profile` input on the deploy step. See
-[Azure login with OIDC](https://github.com/Azure/login#login-with-openid-connect-oidc-recommended)
-for details.
+Then change the login step to use that secret (and you can drop the
+`id-token: write` permission):
+
+```yaml
+      - name: Azure login (service principal)
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+```
+
+This works without basic auth too, but it stores a long-lived credential in
+GitHub, so OIDC is preferred where possible.

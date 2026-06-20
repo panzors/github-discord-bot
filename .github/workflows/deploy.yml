@@ -4,7 +4,9 @@ name: Deploy to Azure Functions
 on:
   workflow_dispatch:
 
+# OIDC: id-token write is required for azure/login to request a federated token.
 permissions:
+  id-token: write
   contents: read
 
 env:
@@ -19,18 +21,26 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Verify secrets are accessible
+      - name: Verify required configuration is present
         run: |
-          if [ -z "${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}" ]; then
-            echo "ERROR: AZURE_FUNCTIONAPP_PUBLISH_PROFILE secret is not set"
-            exit 1
-          fi
+          missing=0
+          for name in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID; do
+            if [ -z "${!name}" ]; then
+              echo "ERROR: secret $name is not set"
+              missing=1
+            fi
+          done
           if [ -z "${{ vars.AZURE_FUNCTIONAPP_NAME }}" ]; then
-            echo "ERROR: AZURE_FUNCTIONAPP_NAME variable is not set"
-            exit 1
+            echo "ERROR: variable AZURE_FUNCTIONAPP_NAME is not set"
+            missing=1
           fi
+          if [ "$missing" -ne 0 ]; then exit 1; fi
           echo "✓ All required secrets and variables are present"
-          
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
       - name: Set up Node.js ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v4
         with:
@@ -43,9 +53,15 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
       - name: Deploy to Azure Functions
         uses: Azure/functions-action@v1
         with:
           app-name: ${{ vars.AZURE_FUNCTIONAPP_NAME }}
           package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
-          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
