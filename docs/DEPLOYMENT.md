@@ -32,6 +32,24 @@ It will not run on push, pull request, or any schedule — only when you start i
    [`Azure/functions-action`](https://github.com/Azure/functions-action) over the
    authenticated Azure session.
 
+## Sign in to Azure CLI first
+
+All the `az` commands below (except the `az ad app` ones) need an active
+**subscription** in your CLI session. If you skip this you'll see
+`(MissingSubscription) The request did not have a subscription or a valid
+tenant level resource provider.`
+
+```bash
+az login                           # or: az login --use-device-code
+az account list --output table     # list subscriptions you can access
+az account set --subscription "<SUBSCRIPTION_NAME_OR_ID>"
+az account show                    # confirm a subscription is now active
+```
+
+If `az account list` is empty, you're signed into a tenant with no
+subscription — log in to the correct directory with
+`az login --tenant <TENANT_ID>` and set the subscription again.
+
 ## Prerequisites in Azure
 
 Before the first deploy, create the Function App in your subscription (Node.js,
