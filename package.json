@@ -1,0 +1,16 @@
+{
+  "name": "github-discord-bot",
+  "version": "1.0.0",
+  "description": "Azure Function that posts a hello world message to a Discord webhook",
+  "main": "src/functions/*.js",
+  "scripts": {
+    "start": "func start",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.5.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

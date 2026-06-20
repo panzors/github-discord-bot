@@ -1,0 +1,7 @@
+.git*
+.vscode
+local.settings.json
+local.settings.json.example
+test
+*.test.js
+README.md
