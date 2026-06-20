@@ -10,9 +10,29 @@ Discord channel via a [webhook](https://support.discord.com/hc/en-us/articles/22
   programming model). On request, it posts a message to the configured Discord
   webhook.
 - `src/discord.js` — small helper that POSTs a JSON payload to a Discord webhook.
+- `src/functions/triggerWorkflow.js` — HTTP-triggered function (`POST`) that
+  triggers a GitHub Actions [`workflow_dispatch`](https://docs.github.com/en/actions/using-workflows/manually-running-a-workflow)
+  on another repository. The target repo, workflow, and ref come entirely from
+  configuration.
+- `src/github.js` — small helper that dispatches a workflow via the GitHub REST API.
 
-The function responds to `GET` and `POST`. You can override the default greeting
-with a `message` query parameter (GET) or a `{ "message": "..." }` JSON body (POST).
+The `helloDiscord` function responds to `GET` and `POST`. You can override the
+default greeting with a `message` query parameter (GET) or a
+`{ "message": "..." }` JSON body (POST).
+
+### Triggering a workflow on another repository
+
+`POST` to the `triggerWorkflow` function (with its function key). It reads the
+target from app settings and sends a `workflow_dispatch` request:
+
+```bash
+curl -X POST "http://localhost:7071/api/triggerWorkflow"
+```
+
+On success it returns `202` with the dispatched target. The GitHub token needs
+permission to run workflows on the target repo (a fine-grained PAT with
+**Actions: read and write** on that repository, or a classic PAT with the
+`workflow` scope).
 
 ## Prerequisites
 
@@ -101,6 +121,13 @@ you need to configure to deploy to your Azure subscription.
 
 ## Configuration
 
-| Setting               | Description                                  |
-| --------------------- | -------------------------------------------- |
-| `DISCORD_WEBHOOK_URL` | The Discord webhook URL to post messages to. |
+| Setting                | Description                                                                 |
+| ---------------------- | --------------------------------------------------------------------------- |
+| `DISCORD_WEBHOOK_URL`  | The Discord webhook URL to post messages to.                                |
+| `TARGET_GITHUB_TOKEN`  | GitHub token authorized to dispatch workflows on the target repo.           |
+| `TARGET_REPO_URL`      | Target repository, e.g. `https://github.com/owner/repo` (or `owner/repo`).  |
+| `TARGET_WORKFLOW_FILE` | Workflow file name to trigger, e.g. `ci.yml` (or its numeric workflow id).  |
+| `TARGET_WORKFLOW_REF`  | Git ref (branch or tag) the workflow runs on, e.g. `main`.                  |
+
+`TARGET_*` settings are only needed for the `triggerWorkflow` function;
+`DISCORD_WEBHOOK_URL` is only needed for `helloDiscord`.
