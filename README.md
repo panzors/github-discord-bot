@@ -1,0 +1,99 @@
+# github-discord-bot
+
+A minimal **Discord bot** built as an **Azure Function** (Node.js). This is a
+proof of concept: an HTTP-triggered function posts a "hello world" message to a
+Discord channel via a [webhook](https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks).
+
+## How it works
+
+- `src/functions/helloDiscord.js` — HTTP-triggered Azure Function (Node.js v4
+  programming model). On request, it posts a message to the configured Discord
+  webhook.
+- `src/discord.js` — small helper that POSTs a JSON payload to a Discord webhook.
+
+The function responds to `GET` and `POST`. You can override the default greeting
+with a `message` query parameter (GET) or a `{ "message": "..." }` JSON body (POST).
+
+## Prerequisites
+
+- [Node.js](https://nodejs.org/) 18 or newer
+- [Azure Functions Core Tools v4](https://learn.microsoft.com/azure/azure-functions/functions-run-local)
+  installed globally: `npm install -g azure-functions-core-tools@4 --unsafe-perm true`
+- A Discord webhook URL — in Discord: **Server Settings → Integrations →
+  Webhooks → New Webhook**, then copy the webhook URL.
+
+## Run locally
+
+1. Install dependencies:
+
+   ```bash
+   npm install
+   ```
+
+2. Create your local settings from the example and add your webhook URL:
+
+   ```bash
+   cp local.settings.json.example local.settings.json
+   ```
+
+   Edit `local.settings.json` and set `DISCORD_WEBHOOK_URL`.
+
+3. Start the function host:
+
+   ```bash
+   npm start
+   ```
+
+4. Trigger it (the host prints the exact URL, including the function key):
+
+   ```bash
+   curl "http://localhost:7071/api/helloDiscord"
+   # or with a custom message:
+   curl "http://localhost:7071/api/helloDiscord?message=Hi%20from%20curl"
+   ```
+
+   A message should appear in your Discord channel.
+
+## Run tests
+
+```bash
+npm test
+```
+
+## Deploy to Azure
+
+1. Create a Function App (Node.js, v4) in Azure — for example via the Azure CLI:
+
+   ```bash
+   az functionapp create \
+     --resource-group <resource-group> \
+     --consumption-plan-location <region> \
+     --runtime node \
+     --runtime-version 22 \
+     --functions-version 4 \
+     --name <app-name> \
+     --storage-account <storage-account>
+   ```
+
+2. Set the webhook URL as an application setting (never commit secrets):
+
+   ```bash
+   az functionapp config appsettings set \
+     --name <app-name> \
+     --resource-group <resource-group> \
+     --settings DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/your-id/your-token"
+   ```
+
+3. Publish:
+
+   ```bash
+   func azure functionapp publish <app-name>
+   ```
+
+After deploying, call the function's URL (with its function key) to post to Discord.
+
+## Configuration
+
+| Setting               | Description                                  |
+| --------------------- | -------------------------------------------- |
+| `DISCORD_WEBHOOK_URL` | The Discord webhook URL to post messages to. |
