@@ -3,6 +3,10 @@
   "Values": {
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
     "FUNCTIONS_WORKER_RUNTIME": "node",
-    "DISCORD_WEBHOOK_URL": "https://discord.com/api/webhooks/your-id/your-token"
+    "DISCORD_WEBHOOK_URL": "https://discord.com/api/webhooks/your-id/your-token",
+    "TARGET_GITHUB_TOKEN": "ghp_your_personal_access_token",
+    "TARGET_REPO_URL": "https://github.com/owner/repo",
+    "TARGET_WORKFLOW_FILE": "ci.yml",
+    "TARGET_WORKFLOW_REF": "main"
   }
 }

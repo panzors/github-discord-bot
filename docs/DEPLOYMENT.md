@@ -59,27 +59,47 @@ Add these under **Settings → Secrets and variables → Actions** in the reposi
 This is a non-sensitive **repository variable** (the "Variables" tab next to
 "Secrets"), referenced in the workflow as `${{ vars.AZURE_FUNCTIONAPP_NAME }}`.
 
-### Runtime app setting (configured in Azure, not GitHub)
+### Runtime app settings (configured in Azure, not GitHub)
 
-The function reads the Discord webhook URL from the `DISCORD_WEBHOOK_URL`
-application setting. This is **not** a GitHub secret — set it on the Function App
-itself so it is available at runtime:
+The functions read their configuration from Function App **application settings**.
+These are **not** GitHub secrets — set them on the Function App itself so they are
+available at runtime.
+
+| App setting            | Used by           | Description |
+| ---------------------- | ----------------- | ----------- |
+| `DISCORD_WEBHOOK_URL`  | `helloDiscord`    | The Discord webhook URL to post messages to. |
+| `TARGET_GITHUB_TOKEN`  | `triggerWorkflow` | GitHub token authorized to dispatch workflows on the target repo. Use a fine-grained PAT with **Actions: read and write** on that repo, or a classic PAT with the `workflow` scope. |
+| `TARGET_REPO_URL`      | `triggerWorkflow` | Target repository, e.g. `https://github.com/owner/repo` (or `owner/repo`). |
+| `TARGET_WORKFLOW_FILE` | `triggerWorkflow` | Workflow file name to trigger, e.g. `ci.yml` (or its numeric workflow id). |
+| `TARGET_WORKFLOW_REF`  | `triggerWorkflow` | Git ref (branch or tag) the workflow runs on, e.g. `main`. |
+
+Set them with the Azure CLI:
 
 ```bash
 az functionapp config appsettings set \
   --name <app-name> \
   --resource-group <resource-group> \
-  --settings DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/your-id/your-token"
+  --settings \
+    DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/your-id/your-token" \
+    TARGET_GITHUB_TOKEN="ghp_your_personal_access_token" \
+    TARGET_REPO_URL="https://github.com/owner/repo" \
+    TARGET_WORKFLOW_FILE="ci.yml" \
+    TARGET_WORKFLOW_REF="main"
 ```
 
-(You can also set it in the Azure Portal under **Settings → Environment variables
-→ App settings**.)
+(You can also set them in the Azure Portal under **Settings → Environment
+variables → App settings**.)
+
+> `TARGET_GITHUB_TOKEN` is a credential — store it only as a Function App
+> application setting (ideally backed by [Key Vault](https://learn.microsoft.com/azure/app-service/app-service-key-vault-references)),
+> never in source control.
 
 ## Summary of what you need to add
 
 - **GitHub secret:** `AZURE_FUNCTIONAPP_PUBLISH_PROFILE`
 - **GitHub variable:** `AZURE_FUNCTIONAPP_NAME`
-- **Azure app setting:** `DISCORD_WEBHOOK_URL`
+- **Azure app settings:** `DISCORD_WEBHOOK_URL`, `TARGET_GITHUB_TOKEN`,
+  `TARGET_REPO_URL`, `TARGET_WORKFLOW_FILE`, `TARGET_WORKFLOW_REF`
 
 ## Alternative: OIDC / service principal authentication
 
