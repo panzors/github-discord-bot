@@ -28,7 +28,7 @@ async function helloDiscord(request, context) {
     }
 
     await postToDiscord(webhookUrl, {
-      username: 'GitHub Discord Bot',
+      username: 'GitHub Bot',
       content: message,
     });
 
