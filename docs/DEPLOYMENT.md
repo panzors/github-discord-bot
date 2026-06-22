@@ -200,3 +200,39 @@ Then change the login step to use that secret (and you can drop the
 
 This works without basic auth too, but it stores a long-lived credential in
 GitHub, so OIDC is preferred where possible.
+
+## Troubleshooting
+
+### `(MissingSubscription) The request did not have a subscription...`
+
+Your local `az` session has no active subscription. Run `az login` and
+`az account set --subscription "<NAME_OR_ID>"` (see
+[Sign in to Azure CLI first](#sign-in-to-azure-cli-first)).
+
+### `azure/login` fails: `No subscriptions found for ***`
+
+OIDC authentication succeeded, but the service principal has **no role
+assignment** on any subscription (often because the role-assignment step was
+skipped or failed). Grant it access and re-run the workflow:
+
+```bash
+# Should list at least one assignment; if empty, that's the problem:
+az role assignment list --assignee <AZURE_CLIENT_ID> --all -o table
+
+az role assignment create \
+  --assignee <AZURE_CLIENT_ID> \
+  --role Contributor \
+  --scope "/subscriptions/<AZURE_SUBSCRIPTION_ID>/resourceGroups/<resource-group>"
+```
+
+Also confirm the `AZURE_CLIENT_ID` secret is the same app that holds both the
+federated credential and the role assignment, and that `AZURE_SUBSCRIPTION_ID`
+matches the subscription you granted. Creating role assignments requires
+**Owner** or **User Access Administrator** on the scope.
+
+### `azure/login` fails with a subject / audience mismatch
+
+The federated credential's subject must match how the workflow runs. The deploy
+job uses `environment: production`, so the credential's **Entity type** must be
+**Environment** with name `production` (subject
+`repo:<owner>/<repo>:environment:production`) — not a branch.
