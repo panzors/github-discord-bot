@@ -99,4 +99,49 @@ async function triggerWorkflowDispatch({ token, owner, repo, workflowFile, ref, 
   }
 }
 
-module.exports = { parseRepoUrl, triggerWorkflowDispatch };
+/**
+ * Lists branches for a repository sorted by most recent commit activity.
+ *
+ * @param {object} options
+ * @param {string} options.token - GitHub token.
+ * @param {string} options.owner - Repository owner.
+ * @param {string} options.repo - Repository name.
+ * @param {string} [options.filter] - Optional substring filter applied to branch names.
+ * @returns {Promise<string[]>} Branch names, most recently active first, capped at 25.
+ */
+async function listBranches({ token, owner, repo, filter = '' }) {
+  if (!token) {
+    throw new Error('Missing GitHub token. Set the TARGET_GITHUB_TOKEN setting.');
+  }
+
+  const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/branches?per_page=100`;
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'github-discord-bot',
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`GitHub branches API returned ${response.status} ${response.statusText}: ${text}`);
+  }
+
+  const branches = await response.json();
+  const lowerFilter = filter.toLowerCase();
+
+  return branches
+    .filter(b => !lowerFilter || b.name.toLowerCase().includes(lowerFilter))
+    .sort((a, b) => {
+      const dateA = new Date(a.commit.commit.author.date);
+      const dateB = new Date(b.commit.commit.author.date);
+      return dateB - dateA;
+    })
+    .map(b => b.name)
+    .slice(0, 25);
+}
+
+module.exports = { parseRepoUrl, triggerWorkflowDispatch, listBranches };

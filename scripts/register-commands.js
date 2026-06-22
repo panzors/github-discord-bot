@@ -1,19 +1,22 @@
 'use strict';
 
 /**
- * Registers (creates/updates) the Discord slash command for this application.
+ * Registers (creates/updates) Discord slash commands for this application.
  *
- * Run this once, and again whenever the command definition changes.
+ * Uses PUT (bulk overwrite) so removing a command from the array and re-running
+ * this script automatically deregisters it from Discord.
+ *
+ * Run this once on initial deploy, and again whenever command definitions change.
  *
  * Required environment variables:
  *   DISCORD_APP_ID    Application ID (Developer Portal → General Information).
  *   DISCORD_BOT_TOKEN Bot token (Developer Portal → Bot).
  *
  * Optional:
- *   DISCORD_GUILD_ID  If set, registers the command to that guild (server) only.
+ *   DISCORD_GUILD_ID  If set, registers commands to that guild (server) only.
  *                     Guild commands appear instantly — ideal for testing.
- *                     Without it, the command is registered globally (can take
- *                     up to an hour to propagate).
+ *                     Without it, commands are registered globally (up to 1 hour
+ *                     to propagate).
  *
  * Example:
  *   DISCORD_APP_ID=... DISCORD_BOT_TOKEN=... DISCORD_GUILD_ID=... \
@@ -24,12 +27,34 @@ const APP_ID = process.env.DISCORD_APP_ID;
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const GUILD_ID = process.env.DISCORD_GUILD_ID;
 
-// Keep this name in sync with COMMAND_NAME in src/functions/discordInteractions.js.
-const command = {
-  name: 'deploy',
-  description: 'Trigger the configured GitHub Actions workflow',
-  type: 1, // CHAT_INPUT (slash command)
-};
+const commands = [
+  {
+    name: 'rune2e',
+    description: 'Run the e2e test suite on a branch',
+    type: 1, // CHAT_INPUT (slash command)
+    options: [
+      {
+        type: 3, // STRING
+        name: 'branch',
+        description: 'Branch to run e2e on (default: main)',
+        required: false,
+        autocomplete: true,
+      },
+      {
+        type: 5, // BOOLEAN
+        name: 'fast_mode',
+        description: 'Fast mode: 10 s timeout, no retries. Quick smoke-check signal.',
+        required: false,
+      },
+      {
+        type: 5, // BOOLEAN
+        name: 'record_video',
+        description: 'Record video for all test executions (default: failures only)',
+        required: false,
+      },
+    ],
+  },
+];
 
 async function main() {
   if (!APP_ID || !BOT_TOKEN) {
@@ -41,12 +66,12 @@ async function main() {
     : `https://discord.com/api/v10/applications/${APP_ID}/commands`;
 
   const response = await fetch(url, {
-    method: 'POST',
+    method: 'PUT',
     headers: {
       Authorization: `Bot ${BOT_TOKEN}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(command),
+    body: JSON.stringify(commands),
   });
 
   const text = await response.text();
@@ -55,7 +80,8 @@ async function main() {
   }
 
   const scope = GUILD_ID ? `guild ${GUILD_ID}` : 'globally';
-  console.log(`Registered /${command.name} ${scope}.`);
+  const names = commands.map(c => `/${c.name}`).join(', ');
+  console.log(`Registered ${names} ${scope}.`);
   console.log(text);
 }
 

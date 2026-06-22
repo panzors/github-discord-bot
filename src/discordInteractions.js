@@ -7,11 +7,13 @@ const crypto = require('crypto');
 const InteractionType = {
   PING: 1,
   APPLICATION_COMMAND: 2,
+  APPLICATION_COMMAND_AUTOCOMPLETE: 4,
 };
 
 const InteractionResponseType = {
   PONG: 1,
   CHANNEL_MESSAGE_WITH_SOURCE: 4,
+  APPLICATION_COMMAND_AUTOCOMPLETE_RESULT: 8,
 };
 
 // Message flag to make a response visible only to the invoking user.
