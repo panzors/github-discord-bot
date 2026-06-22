@@ -230,6 +230,25 @@ federated credential and the role assignment, and that `AZURE_SUBSCRIPTION_ID`
 matches the subscription you granted. Creating role assignments requires
 **Owner** or **User Access Administrator** on the scope.
 
+### `az role assignment create` fails with `MissingSubscription` (but `az group list` works)
+
+ARM is fine — the role command's `--assignee` Microsoft Graph lookup is
+misbehaving and surfaces this misleading error. Either assign the role in the
+**Portal** (Subscription → **Access control (IAM)** → **Add role assignment** →
+Contributor → select your app), or bypass the Graph lookup by assigning via the
+service principal's **object id**:
+
+```bash
+appId=$(az ad app list --display-name "github-discord-bot-deploy" --query "[0].appId" -o tsv)
+spId=$(az ad sp show --id "$appId" --query id -o tsv)   # object id (run az ad sp create --id "$appId" if empty)
+
+az role assignment create \
+  --assignee-object-id "$spId" \
+  --assignee-principal-type ServicePrincipal \
+  --role Contributor \
+  --scope "/subscriptions/<AZURE_SUBSCRIPTION_ID>"
+```
+
 ### `azure/login` fails with a subject / audience mismatch
 
 The federated credential's subject must match how the workflow runs. The deploy
