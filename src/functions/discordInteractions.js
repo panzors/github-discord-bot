@@ -1,15 +1,21 @@
 'use strict';
 
-const { app } = require('@azure/functions');
+const { app, output } = require('@azure/functions');
 const {
   InteractionType,
   InteractionResponseType,
   MessageFlags,
   verifyDiscordRequest,
 } = require('../discordInteractions');
-const { parseRepoUrl, triggerWorkflowDispatch, listBranches } = require('../github');
+const { parseRepoUrl, listBranches } = require('../github');
+const { DISPATCH_QUEUE_NAME } = require('../dispatchWorker');
 
 const COMMAND_NAME = 'rune2e';
+
+const dispatchQueueOutput = output.storageQueue({
+  queueName: DISPATCH_QUEUE_NAME,
+  connection: 'AzureWebJobsStorage',
+});
 
 async function discordInteractions(request, context) {
   const rawBody = await request.text();
@@ -87,43 +93,27 @@ async function discordInteractions(request, context) {
     const fastMode = options.find(o => o.name === 'fast_mode')?.value ?? false;
     const recordVideo = options.find(o => o.name === 'record_video')?.value ?? false;
 
-    try {
-      const { owner, repo } = parseRepoUrl(process.env.TARGET_REPO_URL);
-      const workflowFile = process.env.TARGET_WORKFLOW_FILE;
+    // Hand the slow GitHub dispatch off to the queue worker, then immediately
+    // acknowledge with a private "deferred" response so we beat Discord's 3s
+    // deadline even when the dispatch (or a cold start of the worker) is slow.
+    // The worker edits this message with the success/failure result.
+    context.extraOutputs.set(dispatchQueueOutput, {
+      applicationId: interaction.application_id,
+      token: interaction.token,
+      branch,
+      fastMode,
+      recordVideo,
+    });
 
-      await triggerWorkflowDispatch({
-        token: process.env.TARGET_GITHUB_TOKEN,
-        owner,
-        repo,
-        workflowFile,
-        ref: branch,
-        inputs: { fast_mode: fastMode, record_video: recordVideo },
-      });
+    context.log(`Queued e2e dispatch for branch ${branch} (fast_mode=${fastMode}, record_video=${recordVideo})`);
 
-      context.log(`Dispatched ${workflowFile} on ${owner}/${repo}@${branch} (fast_mode=${fastMode}, record_video=${recordVideo})`);
-
-      const flags = [];
-      if (fastMode) flags.push('fast mode');
-      if (recordVideo) flags.push('record video');
-      const flagStr = flags.length ? ` (${flags.join(', ')})` : '';
-
-      return {
-        status: 200,
-        jsonBody: {
-          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          data: { content: `🚀 Running e2e on \`${owner}/${repo}\` @ \`${branch}\`${flagStr}.` },
-        },
-      };
-    } catch (error) {
-      context.error('Failed to dispatch workflow from slash command:', error.message);
-      return {
-        status: 200,
-        jsonBody: {
-          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          data: { content: `❌ Failed to trigger e2e: ${error.message}`, flags: MessageFlags.EPHEMERAL },
-        },
-      };
-    }
+    return {
+      status: 200,
+      jsonBody: {
+        type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+        data: { flags: MessageFlags.EPHEMERAL },
+      },
+    };
   }
 
   return { status: 400, body: 'unhandled interaction type' };
@@ -133,7 +123,8 @@ app.http('discordInteractions', {
   methods: ['POST'],
   authLevel: 'anonymous',
   route: 'discord/interactions',
+  extraOutputs: [dispatchQueueOutput],
   handler: discordInteractions,
 });
 
-module.exports = { discordInteractions, COMMAND_NAME };
+module.exports = { discordInteractions, COMMAND_NAME, DISPATCH_QUEUE_NAME };
