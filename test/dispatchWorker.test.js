@@ -73,7 +73,7 @@ test('dispatches the workflow then edits the deferred message with success', asy
   });
 });
 
-test('parses a JSON string queue item', async () => {
+test('omits unset workflow inputs', async () => {
   await withEnv(async () => {
     const calls = [];
     const originalFetch = global.fetch;
@@ -85,7 +85,7 @@ test('parses a JSON string queue item', async () => {
     const context = makeContext();
     try {
       await handleDispatch(
-        JSON.stringify({ applicationId: 'app2', token: 'tok2', branch: 'main' }),
+        { applicationId: 'app2', token: 'tok2', branch: 'main' },
         context
       );
     } finally {

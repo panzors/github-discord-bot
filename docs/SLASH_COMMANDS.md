@@ -5,15 +5,22 @@ Function, which in turn triggers a GitHub Actions `workflow_dispatch` on another
 repository.
 
 ```
-/deploy ──▶ discordInteractions ──▶ discord-dispatch queue ──▶ discordDispatchWorker ──▶ GitHub workflow_dispatch
-(Discord)   (acks <3s, defers)       (Azure Storage)            (dispatch + edit reply)     (target repo)
+/deploy ──▶ discordInteractions ──▶ GitHub workflow_dispatch
+(Discord)   (acks <3s, defers)       (target repo)
+                  │
+                  └──▶ edits the deferred reply with the result (follow-up webhook)
 ```
 
-The HTTP function does **not** call GitHub itself. It replies immediately with a
-private *deferred* response (Discord shows "thinking…" only to the caller) and
-queues the work. The queue worker then runs the `workflow_dispatch` and edits the
-original reply with the result. This keeps the inbound request inside Discord's
-3-second deadline even if the GitHub call — or a worker cold start — is slow.
+The HTTP function replies immediately with a private *deferred* response (Discord
+shows "thinking…" only to the caller), then kicks off the `workflow_dispatch`
+**without awaiting it** and edits the original reply with the result via the
+interaction follow-up webhook. Acking first keeps the inbound request inside
+Discord's 3-second deadline even if the GitHub call is slow.
+
+This dispatch is **best-effort**: on a Consumption plan the Function instance can
+be recycled right after the response is sent, in which case the follow-up may not
+be delivered. If you need an at-least-once guarantee, move the dispatch onto a
+storage queue (or Durable Functions) so it runs in its own invocation.
 
 Unlike the outbound webhook (`helloDiscord`), this is **inbound**: Discord sends
 signed requests to your function. The flow has three moving parts — a Discord
@@ -24,11 +31,9 @@ signed requests to your function. The flow has three moving parts — a Discord
 
 - `src/functions/discordInteractions.js` — HTTP endpoint (`POST /api/discord/interactions`,
   `anonymous` auth). Verifies Discord's signature, answers the PING health check,
-  and on `/deploy` acks with a deferred reply and queues the dispatch.
-- `src/functions/discordDispatchWorker.js` — queue trigger (thin Azure wiring) on
-  the `discord-dispatch` queue.
-- `src/dispatchWorker.js` — the queue worker logic: runs the `workflow_dispatch`
-  and edits the original deferred reply with the result.
+  and on `/deploy` acks with a deferred reply then fires off the dispatch.
+- `src/dispatchWorker.js` — `handleDispatch`: runs the `workflow_dispatch` and
+  edits the original deferred reply with the result.
 - `src/discord.js` — webhook + interaction follow-up helpers
   (`editOriginalInteractionResponse`).
 - `src/discordInteractions.js` — Ed25519 signature verification (Node's built-in
@@ -115,15 +120,16 @@ and edits that reply with the result — visible only to you:
   Discord won't send one. Security comes from **Ed25519 signature verification** —
   do not remove that check.
 - **3-second rule:** Discord expects a response within ~3 seconds. The handler
-  meets this by returning a deferred response (type `5`) and offloading the
-  GitHub call to the `discord-dispatch` queue; the worker then has up to 15
-  minutes to edit the reply via the interaction follow-up webhook.
+  meets this by returning a deferred response (type `5`) and running the GitHub
+  call without awaiting it; it then has up to 15 minutes to edit the reply via
+  the interaction follow-up webhook.
+- **Best-effort follow-up:** because the dispatch runs after the HTTP response,
+  it isn't guaranteed to finish on a Consumption plan (the instance may be
+  recycled). For an at-least-once guarantee, move the dispatch to a storage queue
+  or Durable Functions so it runs in its own invocation.
 - **Cold starts:** deferring does **not** fix a cold start — if no instance is
   running, nothing can ack within 3s. Keep an instance warm (Premium/Flex
   always-ready instances, or a timer ping) to win that race on the first call.
-- **Queue storage:** the worker uses `AzureWebJobsStorage` (already required by
-  the Functions host), so no extra configuration is needed. The
-  `discord-dispatch` queue is created automatically on first use.
 - **Fixed target:** like the `triggerWorkflow` function, the workflow and ref
   come from config. To let the command choose them, add command *options* in
   `register-commands.js` and read `interaction.data.options` in the handler.

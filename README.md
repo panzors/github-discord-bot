@@ -19,11 +19,11 @@ Discord channel via a [webhook](https://support.discord.com/hc/en-us/articles/22
 - `src/functions/discordInteractions.js` — inbound Discord
   [Interactions Endpoint](https://discord.com/developers/docs/interactions/receiving-and-responding).
   Handles a `/deploy` **slash command**: acks immediately with a private
-  deferred response to beat Discord's 3s deadline, then queues the workflow
+  deferred response to beat Discord's 3s deadline, then fires off the workflow
   dispatch. See [`docs/SLASH_COMMANDS.md`](docs/SLASH_COMMANDS.md).
-- `src/functions/discordDispatchWorker.js` / `src/dispatchWorker.js` — queue
-  worker that runs the GitHub `workflow_dispatch` and edits the deferred reply
-  with the result, off the critical path of the inbound request.
+- `src/dispatchWorker.js` — `handleDispatch`: runs the GitHub `workflow_dispatch`
+  and edits the deferred reply with the result, off the critical path of the
+  inbound request (fire-and-forget, best-effort).
 - `src/discordInteractions.js` — Ed25519 signature verification for incoming
   Discord requests (built-in `crypto`, no extra dependency).
 

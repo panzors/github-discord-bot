@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, output } = require('@azure/functions');
+const { app } = require('@azure/functions');
 const {
   InteractionType,
   InteractionResponseType,
@@ -8,14 +8,9 @@ const {
   verifyDiscordRequest,
 } = require('../discordInteractions');
 const { parseRepoUrl, listBranches } = require('../github');
-const { DISPATCH_QUEUE_NAME } = require('../dispatchWorker');
+const { handleDispatch } = require('../dispatchWorker');
 
 const COMMAND_NAME = 'rune2e';
-
-const dispatchQueueOutput = output.storageQueue({
-  queueName: DISPATCH_QUEUE_NAME,
-  connection: 'AzureWebJobsStorage',
-});
 
 async function discordInteractions(request, context) {
   const rawBody = await request.text();
@@ -93,19 +88,25 @@ async function discordInteractions(request, context) {
     const fastMode = options.find(o => o.name === 'fast_mode')?.value ?? false;
     const recordVideo = options.find(o => o.name === 'record_video')?.value ?? false;
 
-    // Hand the slow GitHub dispatch off to the queue worker, then immediately
+    // Kick off the slow GitHub dispatch without awaiting it, then immediately
     // acknowledge with a private "deferred" response so we beat Discord's 3s
-    // deadline even when the dispatch (or a cold start of the worker) is slow.
-    // The worker edits this message with the success/failure result.
-    context.extraOutputs.set(dispatchQueueOutput, {
-      applicationId: interaction.application_id,
-      token: interaction.token,
-      branch,
-      fastMode,
-      recordVideo,
-    });
+    // deadline even when the dispatch is slow. handleDispatch edits this message
+    // with the success/failure result via the interaction follow-up webhook.
+    //
+    // This is best-effort: on Consumption the instance can be recycled right
+    // after the response is sent, in which case the follow-up may not land.
+    handleDispatch(
+      {
+        applicationId: interaction.application_id,
+        token: interaction.token,
+        branch,
+        fastMode,
+        recordVideo,
+      },
+      context
+    ).catch(error => context.error('Background dispatch failed:', error.message));
 
-    context.log(`Queued e2e dispatch for branch ${branch} (fast_mode=${fastMode}, record_video=${recordVideo})`);
+    context.log(`Acknowledged e2e dispatch for branch ${branch} (fast_mode=${fastMode}, record_video=${recordVideo})`);
 
     return {
       status: 200,
@@ -123,8 +124,7 @@ app.http('discordInteractions', {
   methods: ['POST'],
   authLevel: 'anonymous',
   route: 'discord/interactions',
-  extraOutputs: [dispatchQueueOutput],
   handler: discordInteractions,
 });
 
-module.exports = { discordInteractions, COMMAND_NAME, DISPATCH_QUEUE_NAME };
+module.exports = { discordInteractions, COMMAND_NAME };

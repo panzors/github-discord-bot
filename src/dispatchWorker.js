@@ -3,24 +3,25 @@
 const { editOriginalInteractionResponse } = require('./discord');
 const { parseRepoUrl, triggerWorkflowDispatch } = require('./github');
 
-// Slow work (the GitHub dispatch) is handed to this queue so the HTTP handler
-// can acknowledge Discord within its 3s window. The discordDispatchWorker
-// function drains it and edits the deferred message with the result.
-const DISPATCH_QUEUE_NAME = 'discord-dispatch';
-
 /**
- * Drains a queued slash-command dispatch: triggers the GitHub workflow and then
- * edits the original (deferred) Discord interaction message with the result.
+ * Triggers the GitHub workflow and then edits the original (deferred) Discord
+ * interaction message with the result.
  *
- * Running out of band keeps the HTTP interaction handler within Discord's 3s
- * acknowledgement window. The interaction token is valid for 15 minutes, which
- * comfortably covers the dispatch plus any worker cold start.
+ * The interaction handler kicks this off without awaiting it (fire-and-forget)
+ * so it can acknowledge Discord within its 3s window. The interaction token is
+ * valid for 15 minutes, which comfortably covers the dispatch. Note this is
+ * best-effort: if the Function instance is recycled right after the ack, the
+ * follow-up may not be delivered.
  *
- * @param {object|string} queueItem - The queued payload (object, or JSON string).
+ * @param {object} message - The dispatch payload.
+ * @param {string} message.applicationId - Discord application id.
+ * @param {string} message.token - Discord interaction token.
+ * @param {string} message.branch - Git ref to run the workflow on.
+ * @param {boolean} [message.fastMode] - The fast_mode workflow input.
+ * @param {boolean} [message.recordVideo] - The record_video workflow input.
  * @param {object} context - The Azure Functions invocation context.
  */
-async function handleDispatch(queueItem, context) {
-  const message = typeof queueItem === 'string' ? JSON.parse(queueItem) : queueItem;
+async function handleDispatch(message, context) {
   const { applicationId, token, branch, fastMode, recordVideo } = message;
 
   try {
@@ -65,4 +66,4 @@ async function handleDispatch(queueItem, context) {
   }
 }
 
-module.exports = { handleDispatch, DISPATCH_QUEUE_NAME };
+module.exports = { handleDispatch };
