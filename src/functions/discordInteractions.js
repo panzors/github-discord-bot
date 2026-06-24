@@ -7,7 +7,8 @@ const {
   MessageFlags,
   verifyDiscordRequest,
 } = require('../discordInteractions');
-const { parseRepoUrl, triggerWorkflowDispatch, listBranches } = require('../github');
+const { parseRepoUrl, listBranches } = require('../github');
+const { handleDispatch } = require('../dispatchWorker');
 
 const COMMAND_NAME = 'rune2e';
 
@@ -87,43 +88,33 @@ async function discordInteractions(request, context) {
     const fastMode = options.find(o => o.name === 'fast_mode')?.value ?? false;
     const recordVideo = options.find(o => o.name === 'record_video')?.value ?? false;
 
-    try {
-      const { owner, repo } = parseRepoUrl(process.env.TARGET_REPO_URL);
-      const workflowFile = process.env.TARGET_WORKFLOW_FILE;
+    // Kick off the slow GitHub dispatch without awaiting it, then immediately
+    // acknowledge with a private "deferred" response so we beat Discord's 3s
+    // deadline even when the dispatch is slow. handleDispatch edits this message
+    // with the success/failure result via the interaction follow-up webhook.
+    //
+    // This is best-effort: on Consumption the instance can be recycled right
+    // after the response is sent, in which case the follow-up may not land.
+    handleDispatch(
+      {
+        applicationId: interaction.application_id,
+        token: interaction.token,
+        branch,
+        fastMode,
+        recordVideo,
+      },
+      context
+    ).catch(error => context.error('Background dispatch failed:', error.message));
 
-      await triggerWorkflowDispatch({
-        token: process.env.TARGET_GITHUB_TOKEN,
-        owner,
-        repo,
-        workflowFile,
-        ref: branch,
-        inputs: { fast_mode: fastMode, record_video: recordVideo },
-      });
+    context.log(`Acknowledged e2e dispatch for branch ${branch} (fast_mode=${fastMode}, record_video=${recordVideo})`);
 
-      context.log(`Dispatched ${workflowFile} on ${owner}/${repo}@${branch} (fast_mode=${fastMode}, record_video=${recordVideo})`);
-
-      const flags = [];
-      if (fastMode) flags.push('fast mode');
-      if (recordVideo) flags.push('record video');
-      const flagStr = flags.length ? ` (${flags.join(', ')})` : '';
-
-      return {
-        status: 200,
-        jsonBody: {
-          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          data: { content: `🚀 Running e2e on \`${owner}/${repo}\` @ \`${branch}\`${flagStr}.` },
-        },
-      };
-    } catch (error) {
-      context.error('Failed to dispatch workflow from slash command:', error.message);
-      return {
-        status: 200,
-        jsonBody: {
-          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          data: { content: `❌ Failed to trigger e2e: ${error.message}`, flags: MessageFlags.EPHEMERAL },
-        },
-      };
-    }
+    return {
+      status: 200,
+      jsonBody: {
+        type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+        data: { flags: MessageFlags.EPHEMERAL },
+      },
+    };
   }
 
   return { status: 400, body: 'unhandled interaction type' };

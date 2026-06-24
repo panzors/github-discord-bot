@@ -13,6 +13,9 @@ const InteractionType = {
 const InteractionResponseType = {
   PONG: 1,
   CHANNEL_MESSAGE_WITH_SOURCE: 4,
+  // Acknowledge now and edit the message later via the follow-up webhook. Lets
+  // us reply within Discord's 3s window while slower work runs out of band.
+  DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE: 5,
   APPLICATION_COMMAND_AUTOCOMPLETE_RESULT: 8,
 };
 
