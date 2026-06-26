@@ -201,3 +201,58 @@ Then change the login step to use that secret (and you can drop the
 
 This works without basic auth too, but it stores a long-lived credential in
 GitHub, so OIDC is preferred where possible.
+
+## Troubleshooting
+
+### `(MissingSubscription) The request did not have a subscription...`
+
+Your local `az` session has no active subscription. Run `az login` and
+`az account set --subscription "<NAME_OR_ID>"` (see
+[Sign in to Azure CLI first](#sign-in-to-azure-cli-first)).
+
+### `azure/login` fails: `No subscriptions found for ***`
+
+OIDC authentication succeeded, but the service principal has **no role
+assignment** on any subscription (often because the role-assignment step was
+skipped or failed). Grant it access and re-run the workflow:
+
+```bash
+# Should list at least one assignment; if empty, that's the problem:
+az role assignment list --assignee <AZURE_CLIENT_ID> --all -o table
+
+az role assignment create \
+  --assignee <AZURE_CLIENT_ID> \
+  --role Contributor \
+  --scope "/subscriptions/<AZURE_SUBSCRIPTION_ID>/resourceGroups/<resource-group>"
+```
+
+Also confirm the `AZURE_CLIENT_ID` secret is the same app that holds both the
+federated credential and the role assignment, and that `AZURE_SUBSCRIPTION_ID`
+matches the subscription you granted. Creating role assignments requires
+**Owner** or **User Access Administrator** on the scope.
+
+### `az role assignment create` fails with `MissingSubscription` (but `az group list` works)
+
+ARM is fine — the role command's `--assignee` Microsoft Graph lookup is
+misbehaving and surfaces this misleading error. Either assign the role in the
+**Portal** (Subscription → **Access control (IAM)** → **Add role assignment** →
+Contributor → select your app), or bypass the Graph lookup by assigning via the
+service principal's **object id**:
+
+```bash
+appId=$(az ad app list --display-name "github-discord-bot-deploy" --query "[0].appId" -o tsv)
+spId=$(az ad sp show --id "$appId" --query id -o tsv)   # object id (run az ad sp create --id "$appId" if empty)
+
+az role assignment create \
+  --assignee-object-id "$spId" \
+  --assignee-principal-type ServicePrincipal \
+  --role Contributor \
+  --scope "/subscriptions/<AZURE_SUBSCRIPTION_ID>"
+```
+
+### `azure/login` fails with a subject / audience mismatch
+
+The federated credential's subject must match how the workflow runs. The deploy
+job uses `environment: production`, so the credential's **Entity type** must be
+**Environment** with name `production` (subject
+`repo:<owner>/<repo>:environment:production`) — not a branch.
