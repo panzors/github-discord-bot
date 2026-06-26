@@ -1,0 +1,44 @@
+name: Register Discord slash commands
+
+# Runs automatically when the command definitions change on main, and can be
+# triggered manually (e.g. after adding secrets or targeting a specific guild).
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'scripts/register-commands.js'
+  workflow_dispatch:
+    inputs:
+      guild_id:
+        description: 'Discord guild (server) ID — registers to that guild only (instant). Leave blank to register globally (up to 1 hour to propagate).'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Register slash commands
+        run: node scripts/register-commands.js
+        env:
+          DISCORD_APP_ID: ${{ secrets.DISCORD_APP_ID }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          # On push, use the repository-level guild id (if set). On
+          # workflow_dispatch, the input takes precedence when provided.
+          DISCORD_GUILD_ID: ${{ inputs.guild_id || secrets.DISCORD_GUILD_ID }}

@@ -140,11 +140,12 @@ available at runtime.
 
 | App setting            | Used by           | Description |
 | ---------------------- | ----------------- | ----------- |
-| `DISCORD_WEBHOOK_URL`  | `helloDiscord`    | The Discord webhook URL to post messages to. |
-| `TARGET_GITHUB_TOKEN`  | `triggerWorkflow` | GitHub token authorized to dispatch workflows on the target repo. Use a fine-grained PAT with **Actions: read and write** on that repo, or a classic PAT with the `workflow` scope. |
-| `TARGET_REPO_URL`      | `triggerWorkflow` | Target repository, e.g. `https://github.com/owner/repo` (or `owner/repo`). |
-| `TARGET_WORKFLOW_FILE` | `triggerWorkflow` | Workflow file name to trigger, e.g. `ci.yml` (or its numeric workflow id). |
-| `TARGET_WORKFLOW_REF`  | `triggerWorkflow` | Git ref (branch or tag) the workflow runs on, e.g. `main`. |
+| `DISCORD_WEBHOOK_URL`  | `helloDiscord`        | The Discord webhook URL to post messages to. |
+| `DISCORD_PUBLIC_KEY`   | `discordInteractions` | Discord application public key; verifies inbound slash-command requests. See [SLASH_COMMANDS.md](SLASH_COMMANDS.md). |
+| `TARGET_GITHUB_TOKEN`  | `triggerWorkflow`, `discordInteractions` | GitHub token authorized to dispatch workflows on the target repo. Use a fine-grained PAT with **Actions: read and write** on that repo, or a classic PAT with the `workflow` scope. |
+| `TARGET_REPO_URL`      | `triggerWorkflow`, `discordInteractions` | Target repository, e.g. `https://github.com/owner/repo` (or `owner/repo`). |
+| `TARGET_WORKFLOW_FILE` | `triggerWorkflow`, `discordInteractions` | Workflow file name to trigger, e.g. `ci.yml` (or its numeric workflow id). |
+| `TARGET_WORKFLOW_REF`  | `triggerWorkflow`, `discordInteractions` | Git ref (branch or tag) the workflow runs on, e.g. `main`. |
 
 Set them with the Azure CLI:
 

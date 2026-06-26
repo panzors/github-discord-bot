@@ -99,4 +99,95 @@ async function triggerWorkflowDispatch({ token, owner, repo, workflowFile, ref, 
   }
 }
 
-module.exports = { parseRepoUrl, triggerWorkflowDispatch };
+/**
+ * Lists branches for a repository sorted by most recent commit activity.
+ *
+ * @param {object} options
+ * @param {string} options.token - GitHub token.
+ * @param {string} options.owner - Repository owner.
+ * @param {string} options.repo - Repository name.
+ * @param {string} [options.filter] - Optional substring filter applied to branch names.
+ * @returns {Promise<string[]>} Branch names, most recently active first, capped at 25.
+ */
+async function listBranches({ token, owner, repo, filter = '' }) {
+  if (!token) {
+    throw new Error('Missing GitHub token. Set the TARGET_GITHUB_TOKEN setting.');
+  }
+
+  const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/branches?per_page=100`;
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'github-discord-bot',
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`GitHub branches API returned ${response.status} ${response.statusText}: ${text}`);
+  }
+
+  const branches = await response.json();
+  const lowerFilter = filter.toLowerCase();
+
+  return branches
+    .filter(b => !lowerFilter || b.name.toLowerCase().includes(lowerFilter))
+    .sort((a, b) => {
+      const dateA = new Date(a.commit.commit.author.date);
+      const dateB = new Date(b.commit.commit.author.date);
+      return dateB - dateA;
+    })
+    .map(b => b.name)
+    .slice(0, 25);
+}
+
+/**
+ * Lists issues for a repository filtered by state and creation/close date.
+ *
+ * @param {object} options
+ * @param {string} options.token - GitHub token.
+ * @param {string} options.owner - Repository owner.
+ * @param {string} options.repo - Repository name.
+ * @param {'open'|'closed'} options.state - Issue state to filter by.
+ * @param {number} options.days - Number of days to look back.
+ * @returns {Promise<Array<{number: number, title: string, html_url: string, created_at: string, closed_at: string|null}>>}
+ */
+async function listIssues({ token, owner, repo, state, days }) {
+  if (!token) {
+    throw new Error('Missing GitHub token. Set the TARGET_GITHUB_TOKEN setting.');
+  }
+
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/issues?state=${state}&since=${since}&per_page=100&sort=created&direction=desc`;
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'github-discord-bot',
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`GitHub issues API returned ${response.status} ${response.statusText}: ${text}`);
+  }
+
+  const issues = await response.json();
+  // Exclude pull requests (GitHub issues API returns PRs too)
+  const filtered = issues.filter(i => !i.pull_request);
+
+  if (state === 'closed') {
+    // For closed issues, filter by closed_at within the window
+    const sinceDate = new Date(since);
+    return filtered.filter(i => i.closed_at && new Date(i.closed_at) >= sinceDate);
+  }
+
+  return filtered;
+}
+
+module.exports = { parseRepoUrl, triggerWorkflowDispatch, listBranches, listIssues };
