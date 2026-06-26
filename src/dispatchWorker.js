@@ -1,7 +1,7 @@
 'use strict';
 
 const { editOriginalInteractionResponse } = require('./discord');
-const { parseRepoUrl, triggerWorkflowDispatch } = require('./github');
+const { parseRepoUrl, triggerWorkflowDispatch, listIssues } = require('./github');
 
 /**
  * Triggers the GitHub workflow and then edits the original (deferred) Discord
@@ -66,4 +66,56 @@ async function handleDispatch(message, context) {
   }
 }
 
-module.exports = { handleDispatch };
+/**
+ * Fetches issues (opened or closed) from GitHub and edits the deferred Discord
+ * interaction message with the results.
+ *
+ * @param {object} message
+ * @param {string} message.applicationId
+ * @param {string} message.token
+ * @param {'open'|'closed'} message.state
+ * @param {number} message.days
+ * @param {object} context
+ */
+async function handleIssues(message, context) {
+  const { applicationId, token, state, days } = message;
+
+  try {
+    const { owner, repo } = parseRepoUrl(process.env.TARGET_REPO_URL);
+    const issues = await listIssues({
+      token: process.env.TARGET_GITHUB_TOKEN,
+      owner,
+      repo,
+      state,
+      days,
+    });
+
+    const hours = days * 24;
+    const timeLabel = hours === 24 ? 'last 24 hours' : `last ${hours} hours`;
+    const verb = state === 'closed' ? 'closed' : 'opened';
+    const repoUrl = `https://github.com/${owner}/${repo}`;
+
+    let content;
+    if (issues.length === 0) {
+      content = `No issues ${verb} in the ${timeLabel} for [${owner}/${repo}](${repoUrl}).`;
+    } else {
+      const lines = issues.map(i => `• [#${i.number} ${i.title}](${i.html_url})`);
+      content = `**${issues.length} issue${issues.length === 1 ? '' : 's'} ${verb} in the ${timeLabel}** — [${owner}/${repo}](${repoUrl}):\n${lines.join('\n')}`;
+    }
+
+    await editOriginalInteractionResponse({ applicationId, token, payload: { content } });
+  } catch (error) {
+    context.error('Failed to fetch issues:', error.message);
+    try {
+      await editOriginalInteractionResponse({
+        applicationId,
+        token,
+        payload: { content: `❌ Failed to fetch issues: ${error.message}` },
+      });
+    } catch (followUpError) {
+      context.error('Failed to post failure follow-up to Discord:', followUpError.message);
+    }
+  }
+}
+
+module.exports = { handleDispatch, handleIssues };
