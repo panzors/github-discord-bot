@@ -8,9 +8,11 @@ const {
   verifyDiscordRequest,
 } = require('../discordInteractions');
 const { parseRepoUrl, listBranches } = require('../github');
-const { handleDispatch } = require('../dispatchWorker');
+const { handleDispatch, handleIssues } = require('../dispatchWorker');
 
 const COMMAND_NAME = 'rune2e';
+const ISSUES_OPENED_COMMAND = 'issuesopened';
+const ISSUES_CLOSED_COMMAND = 'issuesclosed';
 
 async function discordInteractions(request, context) {
   const rawBody = await request.text();
@@ -73,6 +75,34 @@ async function discordInteractions(request, context) {
 
   if (interaction.type === InteractionType.APPLICATION_COMMAND) {
     const commandName = interaction.data?.name;
+    const options = interaction.data?.options ?? [];
+
+    if (commandName === ISSUES_OPENED_COMMAND || commandName === ISSUES_CLOSED_COMMAND) {
+      const rawDays = options.find(o => o.name === 'days')?.value ?? 1;
+      const days = Number.isInteger(rawDays) && rawDays > 0 ? rawDays : 1;
+      const state = commandName === ISSUES_CLOSED_COMMAND ? 'closed' : 'open';
+      const hours = days * 24;
+      const timeLabel = hours === 24 ? 'last 24 hours' : `last ${hours} hours`;
+
+      handleIssues(
+        { applicationId: interaction.application_id, token: interaction.token, state, days },
+        context
+      ).catch(error => context.error('Background issues fetch failed:', error.message));
+
+      context.log(`Acknowledged ${commandName} for days=${days}`);
+
+      return {
+        status: 200,
+        jsonBody: {
+          type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+          data: {
+            content: `Fetching issues ${state === 'closed' ? 'closed' : 'opened'} in the ${timeLabel}…`,
+            flags: MessageFlags.EPHEMERAL,
+          },
+        },
+      };
+    }
+
     if (commandName !== COMMAND_NAME) {
       return {
         status: 200,
@@ -83,7 +113,6 @@ async function discordInteractions(request, context) {
       };
     }
 
-    const options = interaction.data?.options ?? [];
     const branch = options.find(o => o.name === 'branch')?.value ?? 'main';
     const fastMode = options.find(o => o.name === 'fast_mode')?.value ?? false;
     const recordVideo = options.find(o => o.name === 'record_video')?.value ?? false;
@@ -127,4 +156,4 @@ app.http('discordInteractions', {
   handler: discordInteractions,
 });
 
-module.exports = { discordInteractions, COMMAND_NAME };
+module.exports = { discordInteractions, COMMAND_NAME, ISSUES_OPENED_COMMAND, ISSUES_CLOSED_COMMAND };

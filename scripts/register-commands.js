@@ -54,6 +54,34 @@ const commands = [
       },
     ],
   },
+  {
+    name: 'issuesopened',
+    description: 'List issues opened in the last N days (default: 1)',
+    type: 1,
+    options: [
+      {
+        type: 4, // INTEGER
+        name: 'days',
+        description: 'Number of days to look back (default: 1)',
+        required: false,
+        min_value: 1,
+      },
+    ],
+  },
+  {
+    name: 'issuesclosed',
+    description: 'List issues closed in the last N days (default: 1)',
+    type: 1,
+    options: [
+      {
+        type: 4, // INTEGER
+        name: 'days',
+        description: 'Number of days to look back (default: 1)',
+        required: false,
+        min_value: 1,
+      },
+    ],
+  },
 ];
 
 async function main() {
