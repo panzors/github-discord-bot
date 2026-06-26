@@ -78,7 +78,8 @@ async function discordInteractions(request, context) {
     const options = interaction.data?.options ?? [];
 
     if (commandName === ISSUES_OPENED_COMMAND || commandName === ISSUES_CLOSED_COMMAND) {
-      const days = options.find(o => o.name === 'days')?.value ?? 1;
+      const rawDays = options.find(o => o.name === 'days')?.value ?? 1;
+      const days = Number.isInteger(rawDays) && rawDays > 0 ? rawDays : 1;
       const state = commandName === ISSUES_CLOSED_COMMAND ? 'closed' : 'open';
       const hours = days * 24;
       const timeLabel = hours === 24 ? 'last 24 hours' : `last ${hours} hours`;
