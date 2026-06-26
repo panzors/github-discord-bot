@@ -1,7 +1,8 @@
 name: Deploy to Azure Functions
 
-# Manual trigger only — run this from the Actions tab via "Run workflow".
 on:
+  release:
+    types: [published]
   workflow_dispatch:
 
 # OIDC: id-token write is required for azure/login to request a federated token.
