@@ -1,0 +1,22 @@
+changelog:
+  categories:
+    - title: New slash commands
+      labels:
+        - slash-command
+        - feature
+    - title: Bug fixes
+      labels:
+        - bug
+        - fix
+    - title: Infrastructure & deployment
+      labels:
+        - deployment
+        - ci
+        - infrastructure
+    - title: Documentation
+      labels:
+        - documentation
+        - docs
+    - title: Other changes
+      labels:
+        - "*"
