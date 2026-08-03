@@ -82,6 +82,11 @@ const commands = [
       },
     ],
   },
+  {
+    name: 'deploy',
+    description: 'Trigger deployment to Azure Functions',
+    type: 1,
+  },
 ];
 
 async function main() {

@@ -8,6 +8,7 @@
     "TARGET_GITHUB_TOKEN": "ghp_your_personal_access_token",
     "TARGET_REPO_URL": "https://github.com/owner/repo",
     "TARGET_WORKFLOW_FILE": "ci.yml",
-    "TARGET_WORKFLOW_REF": "main"
+    "TARGET_WORKFLOW_REF": "main",
+    "TARGET_DEPLOY_WORKFLOW_FILE": "deploy.yml"
   }
 }

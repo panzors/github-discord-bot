@@ -1,8 +1,16 @@
-# Discord slash command → trigger a workflow
+# Discord slash commands → interact with GitHub
 
-This sets up a Discord **slash command** (`/deploy`) that calls the Azure
-Function, which in turn triggers a GitHub Actions `workflow_dispatch` on another
-repository.
+This sets up Discord **slash commands** that call the Azure Function to interact
+with GitHub Actions workflows and repository data.
+
+## Available slash commands
+
+- **`/deploy`** — triggers a GitHub Actions `workflow_dispatch` (e.g., deployment workflow)
+- **`/rune2e`** — runs e2e tests on a specified branch
+- **`/issuesopened`** — lists issues opened in the last N days
+- **`/issuesclosed`** — lists issues closed in the last N days
+
+Example flow for `/deploy`:
 
 ```
 /deploy ──▶ discordInteractions ──▶ GitHub workflow_dispatch
@@ -55,21 +63,28 @@ signed requests to your function. The flow has three moving parts — a Discord
 ## 2. Configure the Azure Function
 
 The interactions function needs these **application settings** on the Function
-App (in addition to the `TARGET_*` settings the workflow dispatch already uses):
+App:
 
 | App setting          | Description |
 | -------------------- | ----------- |
 | `DISCORD_PUBLIC_KEY` | The application's **Public Key** from step 1. Used to verify request signatures. |
-| `TARGET_GITHUB_TOKEN`  | GitHub token authorized to dispatch the workflow. |
+| `TARGET_GITHUB_TOKEN`  | GitHub token authorized to dispatch workflows. |
 | `TARGET_REPO_URL`      | Target repo, e.g. `https://github.com/owner/repo`. |
-| `TARGET_WORKFLOW_FILE` | Workflow file to trigger, e.g. `ci.yml`. |
-| `TARGET_WORKFLOW_REF`  | Branch/tag to run on, e.g. `main`. |
+| `TARGET_WORKFLOW_FILE` | Workflow file for `/rune2e`, e.g. `ci.yml`. |
+| `TARGET_WORKFLOW_REF`  | Branch/tag for workflows to run on, e.g. `main`. |
+| `TARGET_DEPLOY_WORKFLOW_FILE` | *(Optional)* Workflow file for `/deploy`; defaults to `deploy.yml` if not set. |
 
 ```bash
 az functionapp config appsettings set \
   --name <app-name> \
   --resource-group <resource-group> \
-  --settings DISCORD_PUBLIC_KEY="<public-key>"
+  --settings \
+    DISCORD_PUBLIC_KEY="<public-key>" \
+    TARGET_GITHUB_TOKEN="<github-token>" \
+    TARGET_REPO_URL="https://github.com/owner/repo" \
+    TARGET_WORKFLOW_FILE="ci.yml" \
+    TARGET_WORKFLOW_REF="main" \
+    TARGET_DEPLOY_WORKFLOW_FILE="deploy.yml"
 ```
 
 Deploy the function (see [DEPLOYMENT.md](DEPLOYMENT.md)) so the endpoint is live.
@@ -106,13 +121,21 @@ the URL is incorrect.
 
 ## 5. Use it
 
-In your server, type `/deploy`. The function immediately replies with a private
-(ephemeral) "thinking…" placeholder, then the queue worker triggers the workflow
-and edits that reply with the result — visible only to you:
+In your server, type any of the available slash commands:
 
-```
-🚀 Running e2e on `owner/repo` @ `main`.
-```
+- `/deploy` — triggers the deployment workflow. Replies with:
+  ```
+  🚀 Deploying `owner/repo` to production. Check Actions for progress.
+  ```
+- `/rune2e [branch] [fast_mode] [record_video]` — triggers e2e tests. Replies with:
+  ```
+  🚀 Running e2e on `owner/repo` @ `main`.
+  ```
+- `/issuesopened [days]` or `/issuesclosed [days]` — lists recent issues
+
+The function immediately replies with a private (ephemeral) "thinking…" placeholder,
+then triggers the workflow/data fetch and edits that reply with the result — visible
+only to you.
 
 ## Notes & limitations
 

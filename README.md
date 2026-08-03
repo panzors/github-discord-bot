@@ -106,13 +106,20 @@ npm test
      --storage-account <storage-account>
    ```
 
-2. Set the webhook URL as an application setting (never commit secrets):
+2. Set the required application settings (never commit secrets):
 
    ```bash
    az functionapp config appsettings set \
      --name <app-name> \
      --resource-group <resource-group> \
-     --settings DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/your-id/your-token"
+     --settings \
+       DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/your-id/your-token" \
+       DISCORD_PUBLIC_KEY="<discord-public-key>" \
+       TARGET_GITHUB_TOKEN="<github-token>" \
+       TARGET_REPO_URL="https://github.com/owner/repo" \
+       TARGET_WORKFLOW_FILE="ci.yml" \
+       TARGET_WORKFLOW_REF="main" \
+       TARGET_DEPLOY_WORKFLOW_FILE="deploy.yml"
    ```
 
 3. Publish:
@@ -132,15 +139,23 @@ you need to configure to deploy to your Azure subscription.
 
 ## Configuration
 
-| Setting                | Description                                                                 |
-| ---------------------- | --------------------------------------------------------------------------- |
-| `DISCORD_WEBHOOK_URL`  | The Discord webhook URL to post messages to.                                |
-| `DISCORD_PUBLIC_KEY`   | Discord application public key; verifies slash-command requests.            |
-| `TARGET_GITHUB_TOKEN`  | GitHub token authorized to dispatch workflows on the target repo.           |
-| `TARGET_REPO_URL`      | Target repository, e.g. `https://github.com/owner/repo` (or `owner/repo`).  |
-| `TARGET_WORKFLOW_FILE` | Workflow file name to trigger, e.g. `ci.yml` (or its numeric workflow id).  |
-| `TARGET_WORKFLOW_REF`  | Git ref (branch or tag) the workflow runs on, e.g. `main`.                  |
+### Required settings
 
-`DISCORD_WEBHOOK_URL` is only needed for `helloDiscord`. The `TARGET_*` settings
-are used by both `triggerWorkflow` and the `/deploy` slash command. The slash
-command additionally needs `DISCORD_PUBLIC_KEY`.
+| Setting              | Used by                    | Description                                                               |
+| -------------------- | -------------------------- | ------------------------------------------------------------------------- |
+| `DISCORD_WEBHOOK_URL` | `helloDiscord`             | Discord webhook URL for posting messages.                                 |
+| `DISCORD_PUBLIC_KEY` | Slash commands             | Discord application public key; verifies request signatures.              |
+
+### Workflow dispatch settings
+
+These are required for the `/rune2e`, `/deploy`, `/issuesopened`, and `/issuesclosed` slash commands and the `triggerWorkflow` function:
+
+| Setting                      | Description                                                                 |
+| ---------------------------- | --------------------------------------------------------------------------- |
+| `TARGET_GITHUB_TOKEN`        | GitHub token with **Actions: read and write** permission on target repo.   |
+| `TARGET_REPO_URL`            | Target repository, e.g. `https://github.com/owner/repo` (or `owner/repo`).  |
+| `TARGET_WORKFLOW_FILE`       | Workflow file name for `/rune2e`, e.g. `ci.yml` (or its numeric workflow id). |
+| `TARGET_WORKFLOW_REF`        | Git ref (branch or tag) the workflow runs on, e.g. `main`.                  |
+| `TARGET_DEPLOY_WORKFLOW_FILE` | *(Optional)* Workflow file name for `/deploy`; defaults to `deploy.yml`. If not set, `/deploy` responds "Nothing happened because no action has been configured." |
+
+**Note:** If `TARGET_REPO_URL` or `TARGET_GITHUB_TOKEN` are not set, workflow dispatch commands respond with "Nothing happened because no action has been configured."
