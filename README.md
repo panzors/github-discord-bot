@@ -148,7 +148,7 @@ you need to configure to deploy to your Azure subscription.
 
 ### Workflow dispatch settings
 
-These are required for the `/rune2e`, `/deploy`, `/issuesopened`, and `/issuesclosed` slash commands and the `triggerWorkflow` function:
+These are required for the `/rune2e`, `/deploy`, `/runsmoketest`, `/issuesopened`, and `/issuesclosed` slash commands and the `triggerWorkflow` function:
 
 | Setting                      | Description                                                                 |
 | ---------------------------- | --------------------------------------------------------------------------- |
@@ -157,5 +157,6 @@ These are required for the `/rune2e`, `/deploy`, `/issuesopened`, and `/issuescl
 | `TARGET_WORKFLOW_FILE`       | Workflow file name for `/rune2e`, e.g. `ci.yml` (or its numeric workflow id). |
 | `TARGET_WORKFLOW_REF`        | Git ref (branch or tag) the workflow runs on, e.g. `main`.                  |
 | `TARGET_DEPLOY_WORKFLOW_FILE` | *(Optional)* Workflow file name for `/deploy`; defaults to `deploy.yml`. If not set, `/deploy` responds "Nothing happened because no action has been configured." |
+| `TARGET_SMOKE_TEST_LIVE_WORKFLOW_FILE` | *(Optional)* Workflow file name for `/runsmoketest`; defaults to `smoke-test-live.yml`. If not set, `/runsmoketest` responds "Nothing happened because no action has been configured." |
 
 **Note:** If `TARGET_REPO_URL` or `TARGET_GITHUB_TOKEN` are not set, workflow dispatch commands respond with "Nothing happened because no action has been configured."

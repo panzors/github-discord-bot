@@ -176,4 +176,62 @@ async function handleDeploy(message, context) {
   }
 }
 
-module.exports = { handleDispatch, handleIssues, handleDeploy };
+/**
+ * Triggers the smoke test live workflow on the target repository and edits the
+ * original Discord interaction message with the result.
+ *
+ * @param {object} message
+ * @param {string} message.applicationId - Discord application id.
+ * @param {string} message.token - Discord interaction token.
+ * @param {object} context - The Azure Functions invocation context.
+ */
+async function handleSmokeTestLive(message, context) {
+  const { applicationId, token } = message;
+
+  if (!process.env.TARGET_REPO_URL || !process.env.TARGET_GITHUB_TOKEN) {
+    try {
+      await editOriginalInteractionResponse({
+        applicationId,
+        token,
+        payload: { content: 'Nothing happened because no action has been configured.' },
+      });
+    } catch (error) {
+      context.error('Failed to post unconfigured response to Discord:', error.message);
+    }
+    return;
+  }
+
+  try {
+    const { owner, repo } = parseRepoUrl(process.env.TARGET_REPO_URL);
+    const workflowFile = process.env.TARGET_SMOKE_TEST_LIVE_WORKFLOW_FILE || 'smoke-test-live.yml';
+
+    await triggerWorkflowDispatch({
+      token: process.env.TARGET_GITHUB_TOKEN,
+      owner,
+      repo,
+      workflowFile,
+      ref: 'main',
+    });
+
+    context.log(`Dispatched ${workflowFile} on ${owner}/${repo}@main`);
+
+    await editOriginalInteractionResponse({
+      applicationId,
+      token,
+      payload: { content: `🔍 Running smoke tests on \`${owner}/${repo}\`. Check [Actions](https://github.com/${owner}/${repo}/actions) for progress.` },
+    });
+  } catch (error) {
+    context.error('Failed to dispatch smoke test workflow:', error.message);
+    try {
+      await editOriginalInteractionResponse({
+        applicationId,
+        token,
+        payload: { content: `❌ Failed to trigger smoke tests: ${error.message}` },
+      });
+    } catch (followUpError) {
+      context.error('Failed to post failure follow-up to Discord:', followUpError.message);
+    }
+  }
+}
+
+module.exports = { handleDispatch, handleIssues, handleDeploy, handleSmokeTestLive };

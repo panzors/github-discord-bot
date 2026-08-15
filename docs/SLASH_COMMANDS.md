@@ -7,6 +7,7 @@ with GitHub Actions workflows and repository data.
 
 - **`/deploy`** — triggers a GitHub Actions `workflow_dispatch` (e.g., deployment workflow)
 - **`/rune2e`** — runs e2e tests on a specified branch
+- **`/runsmoketest`** — runs smoke tests against the live environment
 - **`/issuesopened`** — lists issues opened in the last N days
 - **`/issuesclosed`** — lists issues closed in the last N days
 
@@ -73,6 +74,7 @@ App:
 | `TARGET_WORKFLOW_FILE` | Workflow file for `/rune2e`, e.g. `ci.yml`. |
 | `TARGET_WORKFLOW_REF`  | Branch/tag for workflows to run on, e.g. `main`. |
 | `TARGET_DEPLOY_WORKFLOW_FILE` | *(Optional)* Workflow file for `/deploy`; defaults to `deploy.yml` if not set. |
+| `TARGET_SMOKE_TEST_LIVE_WORKFLOW_FILE` | *(Optional)* Workflow file for `/runsmoketest`; defaults to `smoke-test-live.yml` if not set. |
 
 ```bash
 az functionapp config appsettings set \
@@ -130,6 +132,10 @@ In your server, type any of the available slash commands:
 - `/rune2e [branch] [fast_mode] [record_video]` — triggers e2e tests. Replies with:
   ```
   🚀 Running e2e on `owner/repo` @ `main`.
+  ```
+- `/smoke-test-live` — triggers smoke tests against the live environment. Replies with:
+  ```
+  🔍 Running smoke tests on `owner/repo`. Check Actions for progress.
   ```
 - `/issuesopened [days]` or `/issuesclosed [days]` — lists recent issues
 

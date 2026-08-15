@@ -8,12 +8,13 @@ const {
   verifyDiscordRequest,
 } = require('../discordInteractions');
 const { parseRepoUrl, listBranches } = require('../github');
-const { handleDispatch, handleIssues, handleDeploy } = require('../dispatchWorker');
+const { handleDispatch, handleIssues, handleDeploy, handleSmokeTestLive } = require('../dispatchWorker');
 
 const COMMAND_NAME = 'rune2e';
 const ISSUES_OPENED_COMMAND = 'issuesopened';
 const ISSUES_CLOSED_COMMAND = 'issuesclosed';
 const DEPLOY_COMMAND = 'deploy';
+const SMOKE_TEST_LIVE_COMMAND = 'runsmoketest';
 
 async function discordInteractions(request, context) {
   const rawBody = await request.text();
@@ -121,6 +122,23 @@ async function discordInteractions(request, context) {
       };
     }
 
+    if (commandName === SMOKE_TEST_LIVE_COMMAND) {
+      handleSmokeTestLive(
+        { applicationId: interaction.application_id, token: interaction.token },
+        context
+      ).catch(error => context.error('Background smoke test failed:', error.message));
+
+      context.log('Acknowledged smoke test live command');
+
+      return {
+        status: 200,
+        jsonBody: {
+          type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+          data: { flags: MessageFlags.EPHEMERAL },
+        },
+      };
+    }
+
     if (commandName !== COMMAND_NAME) {
       return {
         status: 200,
@@ -174,4 +192,4 @@ app.http('discordInteractions', {
   handler: discordInteractions,
 });
 
-module.exports = { discordInteractions, COMMAND_NAME, ISSUES_OPENED_COMMAND, ISSUES_CLOSED_COMMAND, DEPLOY_COMMAND };
+module.exports = { discordInteractions, COMMAND_NAME, ISSUES_OPENED_COMMAND, ISSUES_CLOSED_COMMAND, DEPLOY_COMMAND, SMOKE_TEST_LIVE_COMMAND };

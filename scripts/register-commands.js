@@ -87,6 +87,11 @@ const commands = [
     description: 'Trigger deployment to Azure Functions',
     type: 1,
   },
+  {
+    name: 'runsmoketest',
+    description: 'Run smoke tests against live environment',
+    type: 1,
+  },
 ];
 
 async function main() {
