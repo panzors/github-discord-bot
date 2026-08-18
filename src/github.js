@@ -190,4 +190,99 @@ async function listIssues({ token, owner, repo, state, days }) {
   return filtered;
 }
 
-module.exports = { parseRepoUrl, triggerWorkflowDispatch, listBranches, listIssues };
+/**
+ * Fetches the latest successful run of a workflow.
+ *
+ * @param {object} options
+ * @param {string} options.token - GitHub token.
+ * @param {string} options.owner - Repository owner.
+ * @param {string} options.repo - Repository name.
+ * @param {string} options.workflowFile - Workflow file name (e.g. "deploy.yml") or workflow id.
+ * @returns {Promise<{id: number, head_commit: {sha: string, message: string}, head_branch: string, status: string, conclusion: string, created_at: string}|null>}
+ */
+async function getLatestSuccessfulWorkflowRun({ token, owner, repo, workflowFile }) {
+  if (!token) {
+    throw new Error('Missing GitHub token. Set the TARGET_GITHUB_TOKEN setting.');
+  }
+  if (!workflowFile) {
+    throw new Error('Missing workflow file. Set the TARGET_WORKFLOW_FILE setting.');
+  }
+
+  const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/actions/workflows/${encodeURIComponent(
+    workflowFile
+  )}/runs?status=completed&conclusion=success&per_page=1&sort=created&direction=desc`;
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'github-discord-bot',
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`GitHub workflow runs API returned ${response.status} ${response.statusText}: ${text}`);
+  }
+
+  const data = await response.json();
+  const run = data.workflow_runs?.[0];
+
+  if (!run) {
+    return null;
+  }
+
+  return {
+    id: run.id,
+    head_commit: run.head_commit,
+    head_branch: run.head_branch,
+    status: run.status,
+    conclusion: run.conclusion,
+    created_at: run.created_at,
+  };
+}
+
+/**
+ * Compares two commits and returns the commits between them.
+ *
+ * @param {object} options
+ * @param {string} options.token - GitHub token.
+ * @param {string} options.owner - Repository owner.
+ * @param {string} options.repo - Repository name.
+ * @param {string} options.base - Base commit SHA (the "deployed" version).
+ * @param {string} options.head - Head commit SHA (usually main).
+ * @returns {Promise<Array<{sha: string, message: string, html_url: string, author: {login: string}}>>}
+ */
+async function compareCommits({ token, owner, repo, base, head }) {
+  if (!token) {
+    throw new Error('Missing GitHub token. Set the TARGET_GITHUB_TOKEN setting.');
+  }
+
+  const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`;
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'github-discord-bot',
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`GitHub compare API returned ${response.status} ${response.statusText}: ${text}`);
+  }
+
+  const data = await response.json();
+
+  return (data.commits || []).map(commit => ({
+    sha: commit.sha.substring(0, 7),
+    message: commit.commit.message.split('\n')[0],
+    html_url: commit.html_url,
+    author: { login: commit.author?.login || commit.commit.author.name },
+  }));
+}
+
+module.exports = { parseRepoUrl, triggerWorkflowDispatch, listBranches, listIssues, getLatestSuccessfulWorkflowRun, compareCommits };

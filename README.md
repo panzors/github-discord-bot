@@ -21,9 +21,15 @@ Discord channel via a [webhook](https://support.discord.com/hc/en-us/articles/22
   Handles a `/deploy` **slash command**: acks immediately with a private
   deferred response to beat Discord's 3s deadline, then fires off the workflow
   dispatch. See [`docs/SLASH_COMMANDS.md`](docs/SLASH_COMMANDS.md).
-- `src/dispatchWorker.js` — `handleDispatch`: runs the GitHub `workflow_dispatch`
-  and edits the deferred reply with the result, off the critical path of the
-  inbound request (fire-and-forget, best-effort).
+- `src/functions/appInsightsAlert.js` — HTTP-triggered function (`POST`) that
+  receives Application Insights alert webhooks and forwards them to Discord with
+  formatted embeds including alert severity, timestamp, and resource information.
+- `src/dispatchWorker.js` — handles background workflow triggers and deployment
+  diffs:
+  - `handleDispatch`: runs the GitHub `workflow_dispatch` and edits the deferred
+    reply with the result, off the critical path (fire-and-forget, best-effort).
+  - `handleDiffWithDeployed`: fetches the latest successful deployment and diffs
+    it against the main branch, reporting deployed version and any commits ahead.
 - `src/discordInteractions.js` — Ed25519 signature verification for incoming
   Discord requests (built-in `crypto`, no extra dependency).
 
@@ -44,6 +50,16 @@ On success it returns `202` with the dispatched target. The GitHub token needs
 permission to run workflows on the target repo (a fine-grained PAT with
 **Actions: read and write** on that repository, or a classic PAT with the
 `workflow` scope).
+
+### Diffing deployed version
+
+Use the `/diffwithdeployed` slash command to compare the latest successful deployment
+against the main branch. It:
+
+- Fetches the most recent successful run of the configured deploy workflow
+- Shows the deployed commit hash and timestamp
+- Lists any commits ahead on `main` that haven't been deployed yet
+- Helps you quickly see what changes are pending deployment
 
 ## Prerequisites
 
@@ -148,7 +164,7 @@ you need to configure to deploy to your Azure subscription.
 
 ### Workflow dispatch settings
 
-These are required for the `/rune2e`, `/deploy`, `/runsmoketest`, `/issuesopened`, and `/issuesclosed` slash commands and the `triggerWorkflow` function:
+These are required for the `/rune2e`, `/deploy`, `/runsmoketest`, `/issuesopened`, `/issuesclosed`, and `/diffwithdeployed` slash commands and the `triggerWorkflow` function:
 
 | Setting                      | Description                                                                 |
 | ---------------------------- | --------------------------------------------------------------------------- |

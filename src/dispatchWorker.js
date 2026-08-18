@@ -1,7 +1,7 @@
 'use strict';
 
 const { editOriginalInteractionResponse } = require('./discord');
-const { parseRepoUrl, triggerWorkflowDispatch, listIssues } = require('./github');
+const { parseRepoUrl, triggerWorkflowDispatch, listIssues, getLatestSuccessfulWorkflowRun, compareCommits } = require('./github');
 
 /**
  * Triggers the GitHub workflow and then edits the original (deferred) Discord
@@ -234,4 +234,82 @@ async function handleSmokeTestLive(message, context) {
   }
 }
 
-module.exports = { handleDispatch, handleIssues, handleDeploy, handleSmokeTestLive };
+/**
+ * Fetches the latest successful deployment and diffs it against main branch.
+ *
+ * @param {object} message
+ * @param {string} message.applicationId - Discord application id.
+ * @param {string} message.token - Discord interaction token.
+ * @param {object} context - The Azure Functions invocation context.
+ */
+async function handleDiffWithDeployed(message, context) {
+  const { applicationId, token } = message;
+
+  if (!process.env.TARGET_REPO_URL || !process.env.TARGET_GITHUB_TOKEN) {
+    try {
+      await editOriginalInteractionResponse({
+        applicationId,
+        token,
+        payload: { content: 'Nothing happened because no action has been configured.' },
+      });
+    } catch (error) {
+      context.error('Failed to post unconfigured response to Discord:', error.message);
+    }
+    return;
+  }
+
+  try {
+    const { owner, repo } = parseRepoUrl(process.env.TARGET_REPO_URL);
+    const deployWorkflowFile = process.env.TARGET_DEPLOY_WORKFLOW_FILE || 'deploy.yml';
+
+    const latestRun = await getLatestSuccessfulWorkflowRun({
+      token: process.env.TARGET_GITHUB_TOKEN,
+      owner,
+      repo,
+      workflowFile: deployWorkflowFile,
+    });
+
+    if (!latestRun || !latestRun.head_commit) {
+      await editOriginalInteractionResponse({
+        applicationId,
+        token,
+        payload: { content: '❌ No successful deployment runs found.' },
+      });
+      return;
+    }
+
+    const deployedSha = latestRun.head_commit.sha;
+    const mainSha = 'main';
+
+    const commits = await compareCommits({
+      token: process.env.TARGET_GITHUB_TOKEN,
+      owner,
+      repo,
+      base: deployedSha,
+      head: mainSha,
+    });
+
+    let content;
+    if (commits.length === 0) {
+      content = `✅ Deployed version is up to date with \`main\`.\n\n**Deployed commit:** [\`${deployedSha.substring(0, 7)}\`](https://github.com/${owner}/${repo}/commit/${deployedSha})\n**Deployed at:** ${latestRun.created_at}`;
+    } else {
+      const commitLines = commits.map(c => `• [\`${c.sha}\`](${c.html_url}) — ${c.message}`);
+      content = `🚀 **${commits.length} commit${commits.length === 1 ? '' : 's'} ahead on \`main\`:**\n${commitLines.join('\n')}\n\n**Deployed commit:** [\`${deployedSha.substring(0, 7)}\`](https://github.com/${owner}/${repo}/commit/${deployedSha})\n**Deployed at:** ${latestRun.created_at}`;
+    }
+
+    await editOriginalInteractionResponse({ applicationId, token, payload: { content } });
+  } catch (error) {
+    context.error('Failed to diff with deployed:', error.message);
+    try {
+      await editOriginalInteractionResponse({
+        applicationId,
+        token,
+        payload: { content: `❌ Failed to diff with deployed: ${error.message}` },
+      });
+    } catch (followUpError) {
+      context.error('Failed to post failure follow-up to Discord:', followUpError.message);
+    }
+  }
+}
+
+module.exports = { handleDispatch, handleIssues, handleDeploy, handleSmokeTestLive, handleDiffWithDeployed };

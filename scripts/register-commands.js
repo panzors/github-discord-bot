@@ -92,6 +92,11 @@ const commands = [
     description: 'Run smoke tests against live environment',
     type: 1,
   },
+  {
+    name: 'checkversion',
+    description: 'Check latest deployed version and commits ahead on main',
+    type: 1,
+  },
 ];
 
 async function main() {
