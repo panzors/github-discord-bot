@@ -93,8 +93,8 @@ const commands = [
     type: 1,
   },
   {
-    name: 'checkversion',
-    description: 'Check latest deployed version and commits ahead on main',
+    name: 'diffwithdeployed',
+    description: 'Diff latest deployed version against main branch',
     type: 1,
   },
 ];
