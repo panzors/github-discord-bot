@@ -5,6 +5,7 @@ name: Register Discord slash commands
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 permissions:
   contents: read
