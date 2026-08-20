@@ -295,6 +295,7 @@ async function compareCommits({ token, owner, repo, base, head }) {
   }
 
   const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`;
+  console.log(`Comparing commits at: ${url}`);
 
   const response = await fetch(url, {
     headers: {
@@ -307,6 +308,7 @@ async function compareCommits({ token, owner, repo, base, head }) {
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');
+    console.log(`Compare response status: ${response.status}, body: ${text}`);
     throw new Error(`GitHub compare API returned ${response.status} ${response.statusText}: ${text}`);
   }
 
