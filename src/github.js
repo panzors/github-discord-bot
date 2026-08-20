@@ -244,6 +244,41 @@ async function getLatestSuccessfulWorkflowRun({ token, owner, repo, workflowFile
 }
 
 /**
+ * Gets the commit SHA for a branch.
+ *
+ * @param {object} options
+ * @param {string} options.token - GitHub token.
+ * @param {string} options.owner - Repository owner.
+ * @param {string} options.repo - Repository name.
+ * @param {string} options.branch - Branch name.
+ * @returns {Promise<string>} The commit SHA for the branch.
+ */
+async function getBranchCommitSha({ token, owner, repo, branch }) {
+  if (!token) {
+    throw new Error('Missing GitHub token. Set the TARGET_GITHUB_TOKEN setting.');
+  }
+
+  const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/refs/heads/${encodeURIComponent(branch)}`;
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'github-discord-bot',
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`GitHub branch ref API returned ${response.status} ${response.statusText}: ${text}`);
+  }
+
+  const data = await response.json();
+  return data.object.sha;
+}
+
+/**
  * Compares two commits and returns the commits between them.
  *
  * @param {object} options
@@ -285,4 +320,4 @@ async function compareCommits({ token, owner, repo, base, head }) {
   }));
 }
 
-module.exports = { parseRepoUrl, triggerWorkflowDispatch, listBranches, listIssues, getLatestSuccessfulWorkflowRun, compareCommits };
+module.exports = { parseRepoUrl, triggerWorkflowDispatch, listBranches, listIssues, getLatestSuccessfulWorkflowRun, getBranchCommitSha, compareCommits };

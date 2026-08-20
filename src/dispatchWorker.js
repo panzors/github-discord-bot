@@ -1,7 +1,7 @@
 'use strict';
 
 const { editOriginalInteractionResponse } = require('./discord');
-const { parseRepoUrl, triggerWorkflowDispatch, listIssues, getLatestSuccessfulWorkflowRun, compareCommits } = require('./github');
+const { parseRepoUrl, triggerWorkflowDispatch, listIssues, getLatestSuccessfulWorkflowRun, getBranchCommitSha, compareCommits } = require('./github');
 
 /**
  * Triggers the GitHub workflow and then edits the original (deferred) Discord
@@ -279,7 +279,12 @@ async function handleDiffWithDeployed(message, context) {
     }
 
     const deployedSha = latestRun.head_commit.sha;
-    const mainSha = 'main';
+    const mainSha = await getBranchCommitSha({
+      token: process.env.TARGET_GITHUB_TOKEN,
+      owner,
+      repo,
+      branch: 'main',
+    });
 
     const commits = await compareCommits({
       token: process.env.TARGET_GITHUB_TOKEN,
