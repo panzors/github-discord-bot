@@ -258,7 +258,7 @@ async function getBranchCommitSha({ token, owner, repo, branch }) {
     throw new Error('Missing GitHub token. Set the TARGET_GITHUB_TOKEN setting.');
   }
 
-  const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/refs/heads/${encodeURIComponent(branch)}`;
+  const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/branches/${encodeURIComponent(branch)}`;
 
   const response = await fetch(url, {
     headers: {
@@ -271,11 +271,11 @@ async function getBranchCommitSha({ token, owner, repo, branch }) {
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    throw new Error(`GitHub branch ref API returned ${response.status} ${response.statusText}: ${text}`);
+    throw new Error(`GitHub branch API returned ${response.status} ${response.statusText}: ${text}`);
   }
 
   const data = await response.json();
-  return data.object.sha;
+  return data.commit.sha;
 }
 
 /**

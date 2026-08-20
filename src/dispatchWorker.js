@@ -261,6 +261,9 @@ async function handleDiffWithDeployed(message, context) {
   try {
     const { owner, repo } = parseRepoUrl(process.env.TARGET_REPO_URL);
     const deployWorkflowFile = process.env.TARGET_DEPLOY_WORKFLOW_FILE || 'deploy.yml';
+    const targetBranch = process.env.TARGET_BRANCH || 'main';
+
+    context.log(`Diff with deployed: owner=${owner}, repo=${repo}, branch=${targetBranch}`);
 
     const latestRun = await getLatestSuccessfulWorkflowRun({
       token: process.env.TARGET_GITHUB_TOKEN,
@@ -283,8 +286,10 @@ async function handleDiffWithDeployed(message, context) {
       token: process.env.TARGET_GITHUB_TOKEN,
       owner,
       repo,
-      branch: 'main',
+      branch: targetBranch,
     });
+
+    context.log(`Comparing ${deployedSha} to ${mainSha}`);
 
     const commits = await compareCommits({
       token: process.env.TARGET_GITHUB_TOKEN,
