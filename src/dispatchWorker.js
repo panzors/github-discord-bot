@@ -272,11 +272,12 @@ async function handleDiffWithDeployed(message, context) {
       workflowFile: deployWorkflowFile,
     });
 
-    if (!latestRun || !latestRun.head_commit) {
+    if (!latestRun || !latestRun.head_commit || !latestRun.head_commit.sha) {
+      context.log(`No valid deployment found: latestRun=${!!latestRun}, head_commit=${!!latestRun?.head_commit}, sha=${latestRun?.head_commit?.sha}`);
       await editOriginalInteractionResponse({
         applicationId,
         token,
-        payload: { content: '❌ No successful deployment runs found.' },
+        payload: { content: '❌ No successful deployment runs found with commit information.' },
       });
       return;
     }

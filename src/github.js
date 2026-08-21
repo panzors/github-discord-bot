@@ -230,8 +230,11 @@ async function getLatestSuccessfulWorkflowRun({ token, owner, repo, workflowFile
   const run = data.workflow_runs?.[0];
 
   if (!run) {
+    console.log(`No workflow runs found`);
     return null;
   }
+
+  console.log(`Found workflow run: id=${run.id}, head_commit=${JSON.stringify(run.head_commit)}, head_branch=${run.head_branch}`);
 
   return {
     id: run.id,
