@@ -272,8 +272,8 @@ async function handleDiffWithDeployed(message, context) {
       workflowFile: deployWorkflowFile,
     });
 
-    if (!latestRun || !latestRun.head_commit || !latestRun.head_commit.sha) {
-      context.log(`No valid deployment found: latestRun=${!!latestRun}, head_commit=${!!latestRun?.head_commit}, sha=${latestRun?.head_commit?.sha}`);
+    if (!latestRun || !latestRun.head_commit || (!latestRun.head_commit.sha && !latestRun.head_commit.id)) {
+      context.log(`No valid deployment found: latestRun=${!!latestRun}, head_commit=${!!latestRun?.head_commit}, sha=${latestRun?.head_commit?.sha}, id=${latestRun?.head_commit?.id}`);
       await editOriginalInteractionResponse({
         applicationId,
         token,
@@ -282,7 +282,7 @@ async function handleDiffWithDeployed(message, context) {
       return;
     }
 
-    const deployedSha = latestRun.head_commit.sha;
+    const deployedSha = latestRun.head_commit.sha || latestRun.head_commit.id;
     const mainSha = await getBranchCommitSha({
       token: process.env.TARGET_GITHUB_TOKEN,
       owner,
@@ -304,10 +304,10 @@ async function handleDiffWithDeployed(message, context) {
 
     let content;
     if (commits.length === 0) {
-      content = `✅ Deployed version is up to date with \`${targetBranch}\`.\n\n**Deployed commit:** [\`${deployedSha.substring(0, 7)}\`](https://github.com/${owner}/${repo}/commit/${deployedSha})\n**Current ${targetBranch}:** [\`${mainSha.substring(0, 7)}\`](https://github.com/${owner}/${repo}/commit/${mainSha})\n**Deployed at:** ${latestRun.created_at}`;
+      content = `✅ Deployed version is up to date with \`${targetBranch}\`.\n\n**Deployed commit:** [\`${deployedSha.substring(0, 7)}\`](https://github.com/${owner}/${repo}/commit/${deployedSha})\n**Deployed message:** ${latestRun.head_commit.message.split('\n')[0]}\n**Deployed at:** ${latestRun.created_at}`;
     } else {
       const commitLines = commits.map(c => `• [\`${c.sha}\`](${c.html_url}) — ${c.message}`);
-      content = `🚀 **${commits.length} commit${commits.length === 1 ? '' : 's'} ahead on \`${targetBranch}\`:**\n${commitLines.join('\n')}\n\n**Deployed commit:** [\`${deployedSha.substring(0, 7)}\`](https://github.com/${owner}/${repo}/commit/${deployedSha})\n**Current ${targetBranch}:** [\`${mainSha.substring(0, 7)}\`](https://github.com/${owner}/${repo}/commit/${mainSha})\n**Deployed at:** ${latestRun.created_at}`;
+      content = `🚀 **${commits.length} commit${commits.length === 1 ? '' : 's'} ahead on \`${targetBranch}\`:**\n${commitLines.join('\n')}\n\n**Deployed commit:** [\`${deployedSha.substring(0, 7)}\`](https://github.com/${owner}/${repo}/commit/${deployedSha})\n**Deployed message:** ${latestRun.head_commit.message.split('\n')[0]}\n**Deployed at:** ${latestRun.created_at}`;
     }
 
     await editOriginalInteractionResponse({ applicationId, token, payload: { content } });
