@@ -307,7 +307,30 @@ async function handleDiffWithDeployed(message, context) {
       content = `✅ Deployed version is up to date with \`${targetBranch}\`.\n\n**Deployed commit:** [\`${deployedSha.substring(0, 7)}\`](https://github.com/${owner}/${repo}/commit/${deployedSha})\n**Deployed message:** ${latestRun.head_commit.message.split('\n')[0]}\n**Deployed at:** ${latestRun.created_at}`;
     } else {
       const commitLines = commits.map(c => `• [\`${c.sha}\`](${c.html_url}) — ${c.message}`);
-      content = `🚀 **${commits.length} commit${commits.length === 1 ? '' : 's'} ahead on \`${targetBranch}\`:**\n${commitLines.join('\n')}\n\n**Deployed commit:** [\`${deployedSha.substring(0, 7)}\`](https://github.com/${owner}/${repo}/commit/${deployedSha})\n**Deployed message:** ${latestRun.head_commit.message.split('\n')[0]}\n**Deployed at:** ${latestRun.created_at}`;
+      const prefix = `🚀 **${commits.length} commit${commits.length === 1 ? '' : 's'} ahead on \`${targetBranch}\`:**\n`;
+      const footer = `\n\n**Deployed commit:** [\`${deployedSha.substring(0, 7)}\`](https://github.com/${owner}/${repo}/commit/${deployedSha})\n**Deployed message:** ${latestRun.head_commit.message.split('\n')[0]}\n**Deployed at:** ${latestRun.created_at}`;
+
+      const maxContentLength = 2000;
+      let visibleCommits = commitLines;
+
+      let fullContent = prefix + commitLines.join('\n') + footer;
+      if (fullContent.length > maxContentLength) {
+        visibleCommits = [];
+        for (const line of commitLines) {
+          const testContent = prefix + [...visibleCommits, line].join('\n') + footer;
+          if (testContent.length <= maxContentLength - 20) {
+            visibleCommits.push(line);
+          } else {
+            break;
+          }
+        }
+        const hiddenCount = commits.length - visibleCommits.length;
+        if (hiddenCount > 0) {
+          visibleCommits.push(`\n... and ${hiddenCount} more commit${hiddenCount === 1 ? '' : 's'}`);
+        }
+      }
+
+      content = prefix + visibleCommits.join('\n') + footer;
     }
 
     await editOriginalInteractionResponse({ applicationId, token, payload: { content } });
