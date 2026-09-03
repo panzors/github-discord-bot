@@ -24,9 +24,12 @@ async function appInsightsAlert(request, context) {
 
   try {
     const payload = await request.json();
-    const schemaId = payload.schemaId || '';
+    context.log('Full Application Insights payload:', JSON.stringify(payload, null, 2));
 
-    let alertName, severity, description, fireTime, targetResources, monitorCondition;
+    const schemaId = payload.schemaId || '';
+    context.log('Schema ID detected:', schemaId);
+
+    let alertName, severity, description, fireTime, targetResources, monitorCondition, alertLink;
 
     // Handle Common Alert Schema (API 2021-08-01+) - preferred format
     if (schemaId === 'azureMonitorCommonAlertSchema') {
@@ -37,6 +40,8 @@ async function appInsightsAlert(request, context) {
       fireTime = essentials.firedDateTime || new Date().toISOString();
       monitorCondition = essentials.monitorCondition || 'Unknown';
       targetResources = essentials.alertTargetIDs?.[0] || 'Unknown resource';
+      // Common Alert Schema may include a link in the properties
+      alertLink = payload.data?.alertContext?.searchResultsLink || payload.data?.alertContext?.portalLink || null;
     } else if (schemaId === 'Microsoft.Insights/LogAlert') {
       // Handle Legacy Application Insights format (API 2018-04-16 and earlier)
       alertName = payload.data?.AlertRuleName || 'Alert';
@@ -45,6 +50,7 @@ async function appInsightsAlert(request, context) {
       fireTime = payload.data?.SearchIntervalEndtimeUtc || new Date().toISOString();
       monitorCondition = `Result Count: ${payload.data?.ResultCount || 0}`;
       targetResources = payload.data?.LinkToSearchResults || 'No link available';
+      alertLink = payload.data?.LinkToSearchResults || null;
     } else {
       // Fallback for unknown format
       alertName = 'Application Insights Alert';
@@ -53,7 +59,18 @@ async function appInsightsAlert(request, context) {
       fireTime = new Date().toISOString();
       monitorCondition = 'Unknown condition';
       targetResources = 'Unknown resource';
+      context.log('Warning: Unknown alert schema format. Full payload logged above.');
     }
+
+    context.log('Extracted alert fields:', {
+      alertName,
+      severity,
+      description,
+      fireTime,
+      monitorCondition,
+      targetResources,
+      alertLink: alertLink || 'No link available',
+    });
 
     const severityEmoji = {
       Sev0: '🔴',
@@ -62,6 +79,37 @@ async function appInsightsAlert(request, context) {
       Sev3: '🟡',
       Sev4: '🔵',
     }[severity] || '⚠️';
+
+    const fields = [
+      {
+        name: 'Severity',
+        value: severity,
+        inline: true,
+      },
+      {
+        name: 'Status',
+        value: monitorCondition,
+        inline: true,
+      },
+      {
+        name: 'Time',
+        value: new Date(fireTime).toLocaleString(),
+        inline: false,
+      },
+      {
+        name: 'Resource',
+        value: targetResources.length > 100 ? targetResources.substring(0, 97) + '...' : targetResources,
+        inline: false,
+      },
+    ];
+
+    if (alertLink) {
+      fields.push({
+        name: 'View in Application Insights',
+        value: `[Click here](${alertLink})`,
+        inline: false,
+      });
+    }
 
     const embed = {
       title: `${severityEmoji} ${alertName}`,
@@ -73,28 +121,7 @@ async function appInsightsAlert(request, context) {
         Sev3: 0xffff00,
         Sev4: 0x0000ff,
       }[severity] || 0x888888,
-      fields: [
-        {
-          name: 'Severity',
-          value: severity,
-          inline: true,
-        },
-        {
-          name: 'Status',
-          value: monitorCondition,
-          inline: true,
-        },
-        {
-          name: 'Time',
-          value: new Date(fireTime).toLocaleString(),
-          inline: false,
-        },
-        {
-          name: 'Resource',
-          value: targetResources.length > 100 ? targetResources.substring(0, 97) + '...' : targetResources,
-          inline: false,
-        },
-      ],
+      fields: fields,
       timestamp: fireTime,
     };
 
