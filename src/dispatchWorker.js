@@ -360,7 +360,7 @@ async function handleDiffWithDeployed(message, context) {
  * @param {object} context - The Azure Functions invocation context.
  */
 async function handleDiff(message, context) {
-  const { applicationId, token, count = 5, branch = 'main' } = message;
+  const { applicationId, token, count = 10, branch = 'main' } = message;
 
   if (!process.env.TARGET_REPO_URL || !process.env.TARGET_GITHUB_TOKEN) {
     try {

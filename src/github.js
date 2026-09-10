@@ -333,10 +333,10 @@ async function compareCommits({ token, owner, repo, base, head }) {
  * @param {string} options.owner - Repository owner.
  * @param {string} options.repo - Repository name.
  * @param {string} options.branch - Branch name (default: main).
- * @param {number} options.count - Number of commits to fetch (default: 5, max: 30).
+ * @param {number} options.count - Number of commits to fetch (default: 10, max: 30).
  * @returns {Promise<Array<{sha: string, message: string, html_url: string, author: {login: string}}>>}
  */
-async function getRecentCommits({ token, owner, repo, branch = 'main', count = 5 }) {
+async function getRecentCommits({ token, owner, repo, branch = 'main', count = 10 }) {
   if (!token) {
     throw new Error('Missing GitHub token. Set the TARGET_GITHUB_TOKEN setting.');
   }

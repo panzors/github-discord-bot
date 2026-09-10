@@ -159,7 +159,7 @@ async function discordInteractions(request, context) {
     }
 
     if (commandName === DIFF_COMMAND) {
-      const count = options.find(o => o.name === 'count')?.value ?? 5;
+      const count = options.find(o => o.name === 'count')?.value ?? 10;
       const branch = options.find(o => o.name === 'branch')?.value ?? 'main';
 
       handleDiff(

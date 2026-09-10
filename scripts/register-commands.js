@@ -99,13 +99,13 @@ const commands = [
   },
   {
     name: 'diff',
-    description: 'Show the last N commits (default: 5, max: 30)',
+    description: 'Show the last N commits (default: 10, max: 30)',
     type: 1,
     options: [
       {
         type: 4, // INTEGER
         name: 'count',
-        description: 'Number of commits to show (default: 5, max: 30)',
+        description: 'Number of commits to show (default: 10, max: 30)',
         required: false,
         min_value: 1,
         max_value: 30,
