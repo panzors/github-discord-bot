@@ -325,4 +325,49 @@ async function compareCommits({ token, owner, repo, base, head }) {
   }));
 }
 
-module.exports = { parseRepoUrl, triggerWorkflowDispatch, listBranches, listIssues, getLatestSuccessfulWorkflowRun, getBranchCommitSha, compareCommits };
+/**
+ * Fetches the last n commits from a repository on a specific branch.
+ *
+ * @param {object} options
+ * @param {string} options.token - GitHub token.
+ * @param {string} options.owner - Repository owner.
+ * @param {string} options.repo - Repository name.
+ * @param {string} options.branch - Branch name (default: main).
+ * @param {number} options.count - Number of commits to fetch (default: 5, max: 30).
+ * @returns {Promise<Array<{sha: string, message: string, html_url: string, author: {login: string}}>>}
+ */
+async function getRecentCommits({ token, owner, repo, branch = 'main', count = 5 }) {
+  if (!token) {
+    throw new Error('Missing GitHub token. Set the TARGET_GITHUB_TOKEN setting.');
+  }
+
+  const safeCount = Math.min(Math.max(1, count), 30);
+  const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/commits?sha=${encodeURIComponent(
+    branch
+  )}&per_page=${safeCount}`;
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'github-discord-bot',
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`GitHub commits API returned ${response.status} ${response.statusText}: ${text}`);
+  }
+
+  const commits = await response.json();
+
+  return commits.map(commit => ({
+    sha: commit.sha.substring(0, 7),
+    message: commit.commit.message.split('\n')[0],
+    html_url: commit.html_url,
+    author: { login: commit.author?.login || commit.commit.author.name },
+  }));
+}
+
+module.exports = { parseRepoUrl, triggerWorkflowDispatch, listBranches, listIssues, getLatestSuccessfulWorkflowRun, getBranchCommitSha, compareCommits, getRecentCommits };

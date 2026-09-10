@@ -8,7 +8,7 @@ const {
   verifyDiscordRequest,
 } = require('../discordInteractions');
 const { parseRepoUrl, listBranches } = require('../github');
-const { handleDispatch, handleIssues, handleDeploy, handleSmokeTestLive, handleDiffWithDeployed } = require('../dispatchWorker');
+const { handleDispatch, handleIssues, handleDeploy, handleSmokeTestLive, handleDiffWithDeployed, handleDiff } = require('../dispatchWorker');
 
 const COMMAND_NAME = 'rune2e';
 const ISSUES_OPENED_COMMAND = 'issuesopened';
@@ -16,6 +16,7 @@ const ISSUES_CLOSED_COMMAND = 'issuesclosed';
 const DEPLOY_COMMAND = 'deploy';
 const SMOKE_TEST_LIVE_COMMAND = 'runsmoketest';
 const DIFF_WITH_DEPLOYED_COMMAND = 'diffwithdeployed';
+const DIFF_COMMAND = 'diff';
 
 async function discordInteractions(request, context) {
   const rawBody = await request.text();
@@ -157,6 +158,26 @@ async function discordInteractions(request, context) {
       };
     }
 
+    if (commandName === DIFF_COMMAND) {
+      const count = options.find(o => o.name === 'count')?.value ?? 5;
+      const branch = options.find(o => o.name === 'branch')?.value ?? 'main';
+
+      handleDiff(
+        { applicationId: interaction.application_id, token: interaction.token, count, branch },
+        context
+      ).catch(error => context.error('Background diff fetch failed:', error.message));
+
+      context.log(`Acknowledged diff command for count=${count}, branch=${branch}`);
+
+      return {
+        status: 200,
+        jsonBody: {
+          type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+          data: { flags: MessageFlags.EPHEMERAL },
+        },
+      };
+    }
+
     if (commandName !== COMMAND_NAME) {
       return {
         status: 200,
@@ -210,4 +231,4 @@ app.http('discordInteractions', {
   handler: discordInteractions,
 });
 
-module.exports = { discordInteractions, COMMAND_NAME, ISSUES_OPENED_COMMAND, ISSUES_CLOSED_COMMAND, DEPLOY_COMMAND, SMOKE_TEST_LIVE_COMMAND, DIFF_WITH_DEPLOYED_COMMAND };
+module.exports = { discordInteractions, COMMAND_NAME, ISSUES_OPENED_COMMAND, ISSUES_CLOSED_COMMAND, DEPLOY_COMMAND, SMOKE_TEST_LIVE_COMMAND, DIFF_WITH_DEPLOYED_COMMAND, DIFF_COMMAND };
