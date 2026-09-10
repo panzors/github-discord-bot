@@ -97,6 +97,28 @@ const commands = [
     description: 'Diff latest deployed version against main branch',
     type: 1,
   },
+  {
+    name: 'diff',
+    description: 'Show the last N commits (default: 10, max: 30)',
+    type: 1,
+    options: [
+      {
+        type: 4, // INTEGER
+        name: 'count',
+        description: 'Number of commits to show (default: 10, max: 30)',
+        required: false,
+        min_value: 1,
+        max_value: 30,
+      },
+      {
+        type: 3, // STRING
+        name: 'branch',
+        description: 'Branch to show commits from (default: main)',
+        required: false,
+        autocomplete: true,
+      },
+    ],
+  },
 ];
 
 async function main() {
