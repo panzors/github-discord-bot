@@ -177,6 +177,66 @@ async function handleDeploy(message, context) {
 }
 
 /**
+ * Triggers the Storybook deploy workflow on the target repository for the given
+ * branch and edits the original Discord interaction message with the result.
+ *
+ * @param {object} message
+ * @param {string} message.applicationId - Discord application id.
+ * @param {string} message.token - Discord interaction token.
+ * @param {string} message.branchName - Branch to deploy (the branch_deploy workflow input).
+ * @param {object} context - The Azure Functions invocation context.
+ */
+async function handleDeployStorybook(message, context) {
+  const { applicationId, token, branchName } = message;
+
+  if (!process.env.TARGET_REPO_URL || !process.env.TARGET_GITHUB_TOKEN) {
+    try {
+      await editOriginalInteractionResponse({
+        applicationId,
+        token,
+        payload: { content: 'Nothing happened because no action has been configured.' },
+      });
+    } catch (error) {
+      context.error('Failed to post unconfigured response to Discord:', error.message);
+    }
+    return;
+  }
+
+  try {
+    const { owner, repo } = parseRepoUrl(process.env.TARGET_REPO_URL);
+    const workflowFile = process.env.TARGET_DEPLOY_STORYBOOK_WORKFLOW_FILE || 'deploy-storybook.yml';
+
+    await triggerWorkflowDispatch({
+      token: process.env.TARGET_GITHUB_TOKEN,
+      owner,
+      repo,
+      workflowFile,
+      ref: 'main',
+      inputs: { branch_deploy: branchName },
+    });
+
+    context.log(`Dispatched ${workflowFile} on ${owner}/${repo}@main (branch_deploy=${branchName})`);
+
+    await editOriginalInteractionResponse({
+      applicationId,
+      token,
+      payload: { content: `📚 Deploying Storybook for \`${owner}/${repo}\` @ \`${branchName}\`. Check [Actions](https://github.com/${owner}/${repo}/actions) for progress.` },
+    });
+  } catch (error) {
+    context.error('Failed to dispatch deploy storybook workflow:', error.message);
+    try {
+      await editOriginalInteractionResponse({
+        applicationId,
+        token,
+        payload: { content: `❌ Failed to trigger Storybook deploy: ${error.message}` },
+      });
+    } catch (followUpError) {
+      context.error('Failed to post failure follow-up to Discord:', followUpError.message);
+    }
+  }
+}
+
+/**
  * Triggers the smoke test live workflow on the target repository and edits the
  * original Discord interaction message with the result.
  *
@@ -348,4 +408,4 @@ async function handleDiffWithDeployed(message, context) {
   }
 }
 
-module.exports = { handleDispatch, handleIssues, handleDeploy, handleSmokeTestLive, handleDiffWithDeployed };
+module.exports = { handleDispatch, handleIssues, handleDeploy, handleDeployStorybook, handleSmokeTestLive, handleDiffWithDeployed };

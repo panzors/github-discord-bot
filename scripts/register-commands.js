@@ -88,6 +88,20 @@ const commands = [
     type: 1,
   },
   {
+    name: 'deploystorybook',
+    description: 'Deploy Storybook for a branch',
+    type: 1,
+    options: [
+      {
+        type: 3, // STRING
+        name: 'branchname',
+        description: 'Branch to deploy Storybook from',
+        required: true,
+        autocomplete: true,
+      },
+    ],
+  },
+  {
     name: 'runsmoketest',
     description: 'Run smoke tests against live environment',
     type: 1,

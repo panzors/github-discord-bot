@@ -6,6 +6,7 @@ with GitHub Actions workflows and repository data.
 ## Available slash commands
 
 - **`/deploy`** — triggers a GitHub Actions `workflow_dispatch` (e.g., deployment workflow)
+- **`/deploystorybook branchname:<branch>`** — triggers `deploy-storybook.yml` with `branch_deploy` set to the chosen branch
 - **`/rune2e`** — runs e2e tests on a specified branch
 - **`/runsmoketest`** — runs smoke tests against the live environment
 - **`/issuesopened`** — lists issues opened in the last N days
@@ -74,6 +75,7 @@ App:
 | `TARGET_WORKFLOW_FILE` | Workflow file for `/rune2e`, e.g. `ci.yml`. |
 | `TARGET_WORKFLOW_REF`  | Branch/tag for workflows to run on, e.g. `main`. |
 | `TARGET_DEPLOY_WORKFLOW_FILE` | *(Optional)* Workflow file for `/deploy`; defaults to `deploy.yml` if not set. |
+| `TARGET_DEPLOY_STORYBOOK_WORKFLOW_FILE` | *(Optional)* Workflow file for `/deploystorybook`; defaults to `deploy-storybook.yml` if not set. |
 | `TARGET_SMOKE_TEST_LIVE_WORKFLOW_FILE` | *(Optional)* Workflow file for `/runsmoketest`; defaults to `smoke-test-live.yml` if not set. |
 
 ```bash
