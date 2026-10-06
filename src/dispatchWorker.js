@@ -183,7 +183,7 @@ async function handleDeploy(message, context) {
  * @param {object} message
  * @param {string} message.applicationId - Discord application id.
  * @param {string} message.token - Discord interaction token.
- * @param {string} message.branchName - Branch to deploy (the branch_deploy workflow input).
+ * @param {string} message.branchName - Branch to deploy (the branch workflow input).
  * @param {object} context - The Azure Functions invocation context.
  */
 async function handleDeployStorybook(message, context) {
@@ -212,10 +212,10 @@ async function handleDeployStorybook(message, context) {
       repo,
       workflowFile,
       ref: 'main',
-      inputs: { branch_deploy: branchName },
+      inputs: { branch: branchName },
     });
 
-    context.log(`Dispatched ${workflowFile} on ${owner}/${repo}@main (branch_deploy=${branchName})`);
+    context.log(`Dispatched ${workflowFile} on ${owner}/${repo}@main (branch=${branchName})`);
 
     await editOriginalInteractionResponse({
       applicationId,

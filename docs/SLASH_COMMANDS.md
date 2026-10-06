@@ -6,7 +6,7 @@ with GitHub Actions workflows and repository data.
 ## Available slash commands
 
 - **`/deploy`** — triggers a GitHub Actions `workflow_dispatch` (e.g., deployment workflow)
-- **`/deploystorybook branchname:<branch>`** — triggers `deploy-storybook.yml` with `branch_deploy` set to the chosen branch
+- **`/deploystorybook branchname:<branch>`** — triggers `deploy-storybook.yml` with `branch` set to the chosen branch
 - **`/rune2e`** — runs e2e tests on a specified branch
 - **`/runsmoketest`** — runs smoke tests against the live environment
 - **`/issuesopened`** — lists issues opened in the last N days
