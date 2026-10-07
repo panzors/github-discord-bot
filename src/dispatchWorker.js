@@ -408,7 +408,6 @@ async function handleDiffWithDeployed(message, context) {
   }
 }
 
-module.exports = { handleDispatch, handleIssues, handleDeploy, handleDeployStorybook, handleSmokeTestLive, handleDiffWithDeployed };
 /**
  * Fetches recent commits from a branch and edits the deferred Discord
  * interaction message with the results.
@@ -472,4 +471,4 @@ async function handleDiff(message, context) {
   }
 }
 
-module.exports = { handleDispatch, handleIssues, handleDeploy, handleSmokeTestLive, handleDiffWithDeployed, handleDiff };
+module.exports = { handleDispatch, handleIssues, handleDeploy, handleDeployStorybook, handleSmokeTestLive, handleDiffWithDeployed, handleDiff };
