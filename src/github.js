@@ -100,14 +100,14 @@ async function triggerWorkflowDispatch({ token, owner, repo, workflowFile, ref, 
 }
 
 /**
- * Lists branches for a repository sorted by most recent commit activity.
+ * Lists branches for a repository in GitHub's (alphabetical) order.
  *
  * @param {object} options
  * @param {string} options.token - GitHub token.
  * @param {string} options.owner - Repository owner.
  * @param {string} options.repo - Repository name.
  * @param {string} [options.filter] - Optional substring filter applied to branch names.
- * @returns {Promise<string[]>} Branch names, most recently active first, capped at 25.
+ * @returns {Promise<string[]>} Branch names, capped at 25 (Discord's autocomplete limit).
  */
 async function listBranches({ token, owner, repo, filter = '' }) {
   if (!token) {
@@ -133,13 +133,10 @@ async function listBranches({ token, owner, repo, filter = '' }) {
   const branches = await response.json();
   const lowerFilter = filter.toLowerCase();
 
+  // The list endpoint returns only { name, commit: { sha, url } }, so there is
+  // no commit date to sort by; keep GitHub's alphabetical order.
   return branches
     .filter(b => !lowerFilter || b.name.toLowerCase().includes(lowerFilter))
-    .sort((a, b) => {
-      const dateA = new Date(a.commit.commit.author.date);
-      const dateB = new Date(b.commit.commit.author.date);
-      return dateB - dateA;
-    })
     .map(b => b.name)
     .slice(0, 25);
 }
