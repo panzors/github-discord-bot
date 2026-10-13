@@ -29,7 +29,7 @@ async function appInsightsAlert(request, context) {
     const schemaId = payload.schemaId || '';
     context.log('Schema ID detected:', schemaId);
 
-    let alertName, severity, description, fireTime, targetResources, monitorCondition, alertLink;
+    let alertName, severity, description, fireTime, targetResources, monitorCondition, alertLink, alertRuleLink;
 
     // Handle Common Alert Schema (API 2021-08-01+) - preferred format
     if (schemaId === 'azureMonitorCommonAlertSchema') {
@@ -41,7 +41,15 @@ async function appInsightsAlert(request, context) {
       monitorCondition = essentials.monitorCondition || 'Unknown';
       targetResources = essentials.alertTargetIDs?.[0] || 'Unknown resource';
       // Common Alert Schema may include a link in the properties
-      alertLink = payload.data?.alertContext?.searchResultsLink || payload.data?.alertContext?.portalLink || null;
+      alertLink =
+        payload.data?.alertContext?.searchResultsLink ||
+        payload.data?.alertContext?.portalLink ||
+        essentials.investigationLink ||
+        null;
+      // alertRuleID is the ARM resource ID of the rule, which the portal can open directly
+      alertRuleLink = essentials.alertRuleID
+        ? `https://portal.azure.com/#resource${essentials.alertRuleID}/overview`
+        : null;
     } else if (schemaId === 'Microsoft.Insights/LogAlert') {
       // Handle Legacy Application Insights format (API 2018-04-16 and earlier)
       alertName = payload.data?.AlertRuleName || 'Alert';
@@ -70,6 +78,7 @@ async function appInsightsAlert(request, context) {
       monitorCondition,
       targetResources,
       alertLink: alertLink || 'No link available',
+      alertRuleLink: alertRuleLink || 'No link available',
     });
 
     const severityEmoji = {
@@ -111,8 +120,17 @@ async function appInsightsAlert(request, context) {
       });
     }
 
+    if (alertRuleLink) {
+      fields.push({
+        name: 'Alert Rule',
+        value: `[${alertName}](${alertRuleLink})`,
+        inline: false,
+      });
+    }
+
     const embed = {
       title: `${severityEmoji} ${alertName}`,
+      ...(alertRuleLink && { url: alertRuleLink }),
       description: description.length > 300 ? description.substring(0, 297) + '...' : description,
       color: {
         Sev0: 0xff0000,
