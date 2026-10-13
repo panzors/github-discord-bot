@@ -3,6 +3,25 @@
 const { editOriginalInteractionResponse } = require('./discord');
 const { parseRepoUrl, triggerWorkflowDispatch, listIssues, getLatestSuccessfulWorkflowRun, getBranchCommitSha, compareCommits, getRecentCommits } = require('./github');
 
+const DISCORD_MAX_CONTENT = 2000;
+
+/**
+ * Joins lines between a prefix and footer, dropping trailing lines (with an
+ * "... and N more" note) so the result fits Discord's 2000-char content limit.
+ */
+function fitLines(prefix, lines, footer = '', noun = 'item') {
+  const full = prefix + lines.join('\n') + footer;
+  if (full.length <= DISCORD_MAX_CONTENT) return full;
+  const reserve = 40; // room for the "... and N more" note
+  const visible = [];
+  for (const line of lines) {
+    if ((prefix + [...visible, line].join('\n') + footer).length > DISCORD_MAX_CONTENT - reserve) break;
+    visible.push(line);
+  }
+  const hidden = lines.length - visible.length;
+  return prefix + visible.join('\n') + `\n... and ${hidden} more ${noun}${hidden === 1 ? '' : 's'}` + footer;
+}
+
 /**
  * Triggers the GitHub workflow and then edits the original (deferred) Discord
  * interaction message with the result.
@@ -100,7 +119,7 @@ async function handleIssues(message, context) {
       content = `No issues ${verb} in the ${timeLabel} for [${owner}/${repo}](${repoUrl}).`;
     } else {
       const lines = issues.map(i => `• [#${i.number} ${i.title}](${i.html_url})`);
-      content = `**${issues.length} issue${issues.length === 1 ? '' : 's'} ${verb} in the ${timeLabel}** — [${owner}/${repo}](${repoUrl}):\n${lines.join('\n')}`;
+      content = fitLines(`**${issues.length} issue${issues.length === 1 ? '' : 's'} ${verb} in the ${timeLabel}** — [${owner}/${repo}](${repoUrl}):\n`, lines, '', 'issue');
     }
 
     await editOriginalInteractionResponse({ applicationId, token, payload: { content } });
@@ -370,27 +389,7 @@ async function handleDiffWithDeployed(message, context) {
       const prefix = `🚀 **${commits.length} commit${commits.length === 1 ? '' : 's'} ahead on \`${targetBranch}\`:**\n`;
       const footer = `\n\n**Deployed commit:** [\`${deployedSha.substring(0, 7)}\`](https://github.com/${owner}/${repo}/commit/${deployedSha})\n**Deployed message:** ${latestRun.head_commit.message.split('\n')[0]}\n**Deployed at:** ${latestRun.created_at}`;
 
-      const maxContentLength = 2000;
-      let visibleCommits = commitLines;
-
-      let fullContent = prefix + commitLines.join('\n') + footer;
-      if (fullContent.length > maxContentLength) {
-        visibleCommits = [];
-        for (const line of commitLines) {
-          const testContent = prefix + [...visibleCommits, line].join('\n') + footer;
-          if (testContent.length <= maxContentLength - 20) {
-            visibleCommits.push(line);
-          } else {
-            break;
-          }
-        }
-        const hiddenCount = commits.length - visibleCommits.length;
-        if (hiddenCount > 0) {
-          visibleCommits.push(`\n... and ${hiddenCount} more commit${hiddenCount === 1 ? '' : 's'}`);
-        }
-      }
-
-      content = prefix + visibleCommits.join('\n') + footer;
+      content = fitLines(prefix, commitLines, footer, 'commit');
     }
 
     await editOriginalInteractionResponse({ applicationId, token, payload: { content } });
@@ -453,7 +452,7 @@ async function handleDiff(message, context) {
     } else {
       const commitLines = commits.map(c => `• [\`${c.sha}\`](${c.html_url}) — ${c.message}`);
       const repoUrl = `https://github.com/${owner}/${repo}`;
-      content = `**Last ${commits.length} commit${commits.length === 1 ? '' : 's'} on \`${branch}\`** — [${owner}/${repo}](${repoUrl}):\n${commitLines.join('\n')}`;
+      content = fitLines(`**Last ${commits.length} commit${commits.length === 1 ? '' : 's'} on \`${branch}\`** — [${owner}/${repo}](${repoUrl}):\n`, commitLines, '', 'commit');
     }
 
     await editOriginalInteractionResponse({ applicationId, token, payload: { content } });
@@ -471,4 +470,4 @@ async function handleDiff(message, context) {
   }
 }
 
-module.exports = { handleDispatch, handleIssues, handleDeploy, handleDeployStorybook, handleSmokeTestLive, handleDiffWithDeployed, handleDiff };
+module.exports = { handleDispatch, handleIssues, handleDeploy, handleDeployStorybook, handleSmokeTestLive, handleDiffWithDeployed, handleDiff, fitLines };

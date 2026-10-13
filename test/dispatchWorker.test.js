@@ -129,3 +129,12 @@ test('edits the message with a failure when the dispatch fails', async () => {
     assert.strictEqual(context.errors.length, 1);
   });
 });
+
+test('fitLines truncates to Discord 2000-char limit', () => {
+  const { fitLines } = require('../src/dispatchWorker');
+  const lines = Array.from({ length: 100 }, (_, i) => `• [#${i} ${'x'.repeat(50)}](https://github.com/a/b/issues/${i})`);
+  const out = fitLines('header:\n', lines, '\nfooter', 'issue');
+  assert.ok(out.length <= 2000);
+  assert.match(out, /\.\.\. and \d+ more issues\nfooter$/);
+  assert.strictEqual(fitLines('h:\n', ['a', 'b'], '', 'issue'), 'h:\na\nb');
+});
