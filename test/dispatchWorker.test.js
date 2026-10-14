@@ -2,7 +2,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { handleDispatch } = require('../src/dispatchWorker');
+const { handleDispatch, handleDeploy } = require('../src/dispatchWorker');
 
 function makeContext() {
   return {
@@ -137,4 +137,40 @@ test('fitLines truncates to Discord 2000-char limit', () => {
   assert.ok(out.length <= 2000);
   assert.match(out, /\.\.\. and \d+ more issues\nfooter$/);
   assert.strictEqual(fitLines('h:\n', ['a', 'b'], '', 'issue'), 'h:\na\nb');
+});
+
+test('deploy reports new SQL files as migrations needed', async () => {
+  await withEnv(async () => {
+    const calls = [];
+    const originalFetch = global.fetch;
+    global.fetch = async (url, options) => {
+      calls.push({ url, options });
+      if (url.includes('/runs?')) {
+        return { ok: true, json: async () => ({ workflow_runs: [{ id: 1, head_commit: { id: 'abc1234' } }] }) };
+      }
+      if (url.includes('/compare/')) {
+        return { ok: true, json: async () => ({ files: [
+          { filename: 'supabase/migrations/001_add.sql', status: 'added' },
+          { filename: 'supabase/migrations/000_old.sql', status: 'modified' },
+          { filename: 'src/app.js', status: 'added' },
+        ] }) };
+      }
+      return { ok: true, status: 204, statusText: 'No Content' };
+    };
+
+    const context = makeContext();
+    try {
+      await handleDeploy({ applicationId: 'app1', token: 'tok1' }, context);
+    } finally {
+      global.fetch = originalFetch;
+    }
+
+    assert.match(calls[1].url, /\/compare\/abc1234\.\.\.main$/);
+    assert.match(calls[2].url, /\/dispatches$/);
+    const content = JSON.parse(calls[3].options.body).content;
+    assert.match(content, /Migrations needed/);
+    assert.match(content, /001_add\.sql/);
+    assert.doesNotMatch(content, /000_old\.sql|app\.js/);
+    assert.strictEqual(context.errors.length, 0);
+  });
 });

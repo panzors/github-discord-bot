@@ -326,6 +326,44 @@ async function compareCommits({ token, owner, repo, base, head }) {
 }
 
 /**
+ * Lists filenames added between two commits.
+ *
+ * shortcut: GitHub's compare API returns at most 300 files, so huge diffs may miss some; paginate if that matters.
+ *
+ * @param {object} options
+ * @param {string} options.token - GitHub token.
+ * @param {string} options.owner - Repository owner.
+ * @param {string} options.repo - Repository name.
+ * @param {string} options.base - Base commit SHA or ref.
+ * @param {string} options.head - Head commit SHA or ref.
+ * @returns {Promise<string[]>}
+ */
+async function getAddedFiles({ token, owner, repo, base, head }) {
+  if (!token) {
+    throw new Error('Missing GitHub token. Set the TARGET_GITHUB_TOKEN setting.');
+  }
+
+  const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`;
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'github-discord-bot',
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`GitHub compare API returned ${response.status} ${response.statusText}: ${text}`);
+  }
+
+  const data = await response.json();
+  return (data.files || []).filter(f => f.status === 'added').map(f => f.filename);
+}
+
+/**
  * Fetches the last n commits from a repository on a specific branch.
  *
  * @param {object} options
@@ -370,4 +408,4 @@ async function getRecentCommits({ token, owner, repo, branch = 'main', count = 1
   }));
 }
 
-module.exports = { parseRepoUrl, triggerWorkflowDispatch, listBranches, listIssues, getLatestSuccessfulWorkflowRun, getBranchCommitSha, compareCommits, getRecentCommits };
+module.exports = { parseRepoUrl, triggerWorkflowDispatch, listBranches, listIssues, getLatestSuccessfulWorkflowRun, getBranchCommitSha, compareCommits, getAddedFiles, getRecentCommits };

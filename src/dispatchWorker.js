@@ -1,7 +1,7 @@
 'use strict';
 
 const { editOriginalInteractionResponse } = require('./discord');
-const { parseRepoUrl, triggerWorkflowDispatch, listIssues, getLatestSuccessfulWorkflowRun, getBranchCommitSha, compareCommits, getRecentCommits } = require('./github');
+const { parseRepoUrl, triggerWorkflowDispatch, listIssues, getLatestSuccessfulWorkflowRun, getBranchCommitSha, compareCommits, getAddedFiles, getRecentCommits } = require('./github');
 
 const DISCORD_MAX_CONTENT = 2000;
 
@@ -166,6 +166,24 @@ async function handleDeploy(message, context) {
     const { owner, repo } = parseRepoUrl(process.env.TARGET_REPO_URL);
     const workflowFile = process.env.TARGET_DEPLOY_WORKFLOW_FILE || 'deploy.yml';
 
+    // Check before dispatching so the new run can't become the "latest successful" baseline.
+    let note = '';
+    let migrations = [];
+    try {
+      const latestRun = await getLatestSuccessfulWorkflowRun({ token: process.env.TARGET_GITHUB_TOKEN, owner, repo, workflowFile });
+      const deployedSha = latestRun?.head_commit?.sha || latestRun?.head_commit?.id;
+      if (deployedSha) {
+        const added = await getAddedFiles({ token: process.env.TARGET_GITHUB_TOKEN, owner, repo, base: deployedSha, head: 'main' });
+        migrations = added.filter(f => f.toLowerCase().endsWith('.sql'));
+        if (migrations.length) note = '\n\n⚠️ **Migrations needed** — new SQL files since last deploy:\n';
+      } else {
+        note = '\n\n⚠️ Could not check for migrations: no previous successful deploy found.';
+      }
+    } catch (error) {
+      context.error('Failed to check for migrations:', error.message);
+      note = `\n\n⚠️ Could not check for migrations: ${error.message}`;
+    }
+
     await triggerWorkflowDispatch({
       token: process.env.TARGET_GITHUB_TOKEN,
       owner,
@@ -179,7 +197,7 @@ async function handleDeploy(message, context) {
     await editOriginalInteractionResponse({
       applicationId,
       token,
-      payload: { content: `🚀 Deploying \`${owner}/${repo}\` to production. Check [Actions](https://github.com/${owner}/${repo}/actions) for progress.` },
+      payload: { content: fitLines(`🚀 Deploying \`${owner}/${repo}\` to production. Check [Actions](https://github.com/${owner}/${repo}/actions) for progress.${note}`, migrations.map(f => `• \`${f}\``), '', 'file') },
     });
   } catch (error) {
     context.error('Failed to dispatch deploy workflow:', error.message);
