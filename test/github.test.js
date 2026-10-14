@@ -2,7 +2,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { parseRepoUrl, triggerWorkflowDispatch } = require('../src/github');
+const { parseRepoUrl, triggerWorkflowDispatch, listBranches } = require('../src/github');
 
 test('parseRepoUrl handles https URLs', () => {
   assert.deepStrictEqual(parseRepoUrl('https://github.com/owner/repo'), {
@@ -98,6 +98,26 @@ test('triggerWorkflowDispatch surfaces a non-2xx response', async () => {
         }),
       /GitHub workflow dispatch returned 404 Not Found: workflow not found/
     );
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('listBranches filters the real list-branches response shape', async () => {
+  const originalFetch = global.fetch;
+  // The list endpoint returns only { name, commit: { sha, url } } per branch.
+  global.fetch = async () => ({
+    ok: true,
+    json: async () => [
+      { name: 'feature/login', commit: { sha: 'a1', url: 'u1' }, protected: false },
+      { name: 'feature/logout', commit: { sha: 'b2', url: 'u2' }, protected: false },
+      { name: 'main', commit: { sha: 'c3', url: 'u3' }, protected: true },
+    ],
+  });
+
+  try {
+    const branches = await listBranches({ token: 't', owner: 'o', repo: 'r', filter: 'LOG' });
+    assert.deepStrictEqual(branches, ['feature/login', 'feature/logout']);
   } finally {
     global.fetch = originalFetch;
   }
