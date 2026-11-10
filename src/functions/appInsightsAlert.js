@@ -3,6 +3,40 @@
 const { app } = require('@azure/functions');
 const { postToDiscord } = require('../discord');
 
+const PORTAL_LOGS = 'https://portal.azure.com/#blade/Microsoft_Azure_Monitoring_Logs/LogsBlade';
+
+// ISO 8601 duration (e.g. PT5M, PT1H, P1D) to milliseconds.
+function durationMs(iso) {
+  const m = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec(iso || '');
+  if (!m) return 0;
+  const [, d = 0, h = 0, min = 0, s = 0] = m;
+  return (((+d * 24 + +h) * 60 + +min) * 60 + +s) * 1000;
+}
+
+/**
+ * Portal link to the logs that tripped a common-schema log alert.
+ * Azure ships ready-made links (filtered = only the dimension values that fired);
+ * if they're missing, rebuild one from searchQuery + target resource + evaluation window.
+ */
+function logsLink(data) {
+  const ctx = data?.alertContext || {};
+  const cond = ctx.condition || {};
+  const c = cond.allOf?.[0] || {};
+  const ready =
+    c.linkToFilteredSearchResultsUI || c.linkToSearchResultsUI || // Log Alerts V2
+    ctx.LinkToFilteredSearchResultsUI || ctx.LinkToSearchResultsUI; // legacy log alerts
+  if (ready) return ready;
+
+  const query = c.searchQuery || ctx.SearchQuery;
+  const resourceId = data?.essentials?.alertTargetIDs?.[0];
+  const end = cond.windowEndTime || ctx.SearchIntervalEndtimeUtc;
+  if (!query || !resourceId || !end) return null;
+  // V2 payloads often send windowStartTime === windowEndTime, so derive start from windowSize.
+  let start = cond.windowStartTime;
+  if (!start || start === end) start = new Date(Date.parse(end) - (durationMs(cond.windowSize) || 3600000)).toISOString();
+  return `${PORTAL_LOGS}/resourceId/${encodeURIComponent(resourceId)}/source/LogsBlade.AnalyticsShareLinkToQuery/query/${encodeURIComponent(query)}/timespan/${encodeURIComponent(`${start}/${end}`)}`;
+}
+
 /**
  * HTTP-triggered function that receives Application Insights alert webhooks
  * and forwards them to Discord.
@@ -40,12 +74,7 @@ async function appInsightsAlert(request, context) {
       fireTime = essentials.firedDateTime || new Date().toISOString();
       monitorCondition = essentials.monitorCondition || 'Unknown';
       targetResources = essentials.alertTargetIDs?.[0] || 'Unknown resource';
-      // Common Alert Schema may include a link in the properties
-      alertLink =
-        payload.data?.alertContext?.searchResultsLink ||
-        payload.data?.alertContext?.portalLink ||
-        essentials.investigationLink ||
-        null;
+      alertLink = logsLink(payload.data);
       // alertRuleID is the ARM resource ID of the rule, which the portal can open directly
       alertRuleLink = essentials.alertRuleID
         ? `https://portal.azure.com/#resource${essentials.alertRuleID}/overview`
@@ -169,4 +198,4 @@ app.http('appInsightsAlert', {
   handler: appInsightsAlert,
 });
 
-module.exports = { appInsightsAlert };
+module.exports = { appInsightsAlert, logsLink };
