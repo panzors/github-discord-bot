@@ -28,7 +28,7 @@ Discord channel via a [webhook](https://support.discord.com/hc/en-us/articles/22
   diffs:
   - `handleDispatch`: runs the GitHub `workflow_dispatch` and edits the deferred
     reply with the result, off the critical path (fire-and-forget, best-effort).
-  - `handleDiffWithDeployed`: fetches the latest successful deployment and diffs
+  - `handleDiffWithDeployed`: fetches the latest published release and diffs
     it against the main branch, reporting deployed version and any commits ahead.
 - `src/discordInteractions.js` — Ed25519 signature verification for incoming
   Discord requests (built-in `crypto`, no extra dependency).
@@ -53,11 +53,11 @@ permission to run workflows on the target repo (a fine-grained PAT with
 
 ### Diffing deployed version
 
-Use the `/diffwithdeployed` slash command to compare the latest successful deployment
+Use the `/diffwithdeployed` slash command to compare the latest published release
 against the main branch. It:
 
-- Fetches the most recent successful run of the configured deploy workflow
-- Shows the deployed commit hash and timestamp
+- Fetches the latest GitHub release (e.g. `release-2026.11.21-133332`)
+- Shows the release tag and publish time
 - Lists any commits ahead on `main` that haven't been deployed yet
 - Helps you quickly see what changes are pending deployment
 

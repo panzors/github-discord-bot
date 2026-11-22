@@ -188,28 +188,17 @@ async function listIssues({ token, owner, repo, state, days }) {
 }
 
 /**
- * Fetches the latest successful run of a workflow.
+ * Gets the latest published (non-draft, non-prerelease) release.
  *
- * @param {object} options
- * @param {string} options.token - GitHub token.
- * @param {string} options.owner - Repository owner.
- * @param {string} options.repo - Repository name.
- * @param {string} options.workflowFile - Workflow file name (e.g. "deploy.yml") or workflow id.
- * @returns {Promise<{id: number, head_commit: {sha: string, message: string}, head_branch: string, status: string, conclusion: string, created_at: string}|null>}
+ * @returns {Promise<{tag_name: string, name: string, html_url: string, published_at: string} | null>}
+ *   null when the repo has no releases.
  */
-async function getLatestSuccessfulWorkflowRun({ token, owner, repo, workflowFile }) {
+async function getLatestRelease({ token, owner, repo }) {
   if (!token) {
     throw new Error('Missing GitHub token. Set the TARGET_GITHUB_TOKEN setting.');
   }
-  if (!workflowFile) {
-    throw new Error('Missing workflow file. Set the TARGET_WORKFLOW_FILE setting.');
-  }
 
-  const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/actions/workflows/${encodeURIComponent(
-    workflowFile
-  )}/runs?status=completed&conclusion=success&per_page=1&sort=created&direction=desc`;
-
-  const response = await fetch(url, {
+  const response = await fetch(`${GITHUB_API_BASE}/repos/${owner}/${repo}/releases/latest`, {
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: 'application/vnd.github+json',
@@ -218,29 +207,14 @@ async function getLatestSuccessfulWorkflowRun({ token, owner, repo, workflowFile
     },
   });
 
+  if (response.status === 404) return null;
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    throw new Error(`GitHub workflow runs API returned ${response.status} ${response.statusText}: ${text}`);
+    throw new Error(`GitHub releases API returned ${response.status} ${response.statusText}: ${text}`);
   }
 
-  const data = await response.json();
-  const run = data.workflow_runs?.[0];
-
-  if (!run) {
-    console.log(`No workflow runs found`);
-    return null;
-  }
-
-  console.log(`Found workflow run: id=${run.id}, head_commit=${JSON.stringify(run.head_commit)}, head_branch=${run.head_branch}`);
-
-  return {
-    id: run.id,
-    head_commit: run.head_commit,
-    head_branch: run.head_branch,
-    status: run.status,
-    conclusion: run.conclusion,
-    created_at: run.created_at,
-  };
+  const { tag_name, name, html_url, published_at } = await response.json();
+  return { tag_name, name, html_url, published_at };
 }
 
 /**
@@ -405,4 +379,4 @@ async function getRecentCommits({ token, owner, repo, branch = 'main', count = 1
   }));
 }
 
-module.exports = { parseRepoUrl, triggerWorkflowDispatch, listBranches, listIssues, getLatestSuccessfulWorkflowRun, getBranchCommitSha, compareCommits, getAddedFiles, getRecentCommits };
+module.exports = { parseRepoUrl, triggerWorkflowDispatch, listBranches, listIssues, getLatestRelease, getBranchCommitSha, compareCommits, getAddedFiles, getRecentCommits };

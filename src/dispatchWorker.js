@@ -1,7 +1,7 @@
 'use strict';
 
 const { editOriginalInteractionResponse } = require('./discord');
-const { parseRepoUrl, triggerWorkflowDispatch, listIssues, getLatestSuccessfulWorkflowRun, getBranchCommitSha, compareCommits, getAddedFiles, getRecentCommits } = require('./github');
+const { parseRepoUrl, triggerWorkflowDispatch, listIssues, getLatestRelease, compareCommits, getAddedFiles, getRecentCommits } = require('./github');
 
 const DISCORD_MAX_CONTENT = 2000;
 
@@ -166,18 +166,16 @@ async function handleDeploy(message, context) {
     const { owner, repo } = parseRepoUrl(process.env.TARGET_REPO_URL);
     const workflowFile = process.env.TARGET_DEPLOY_WORKFLOW_FILE || 'deploy.yml';
 
-    // Check before dispatching so the new run can't become the "latest successful" baseline.
     let note = '';
     let migrations = [];
     try {
-      const latestRun = await getLatestSuccessfulWorkflowRun({ token: process.env.TARGET_GITHUB_TOKEN, owner, repo, workflowFile });
-      const deployedSha = latestRun?.head_commit?.sha || latestRun?.head_commit?.id;
-      if (deployedSha) {
-        const added = await getAddedFiles({ token: process.env.TARGET_GITHUB_TOKEN, owner, repo, base: deployedSha, head: 'main' });
+      const release = await getLatestRelease({ token: process.env.TARGET_GITHUB_TOKEN, owner, repo });
+      if (release) {
+        const added = await getAddedFiles({ token: process.env.TARGET_GITHUB_TOKEN, owner, repo, base: release.tag_name, head: 'main' });
         migrations = added.filter(f => f.toLowerCase().endsWith('.sql'));
         if (migrations.length) note = '\n\n⚠️ **Migrations needed** — new SQL files since last deploy:\n';
       } else {
-        note = '\n\n⚠️ Could not check for migrations: no previous successful deploy found.';
+        note = '\n\n⚠️ Could not check for migrations: no previous release found.';
       }
     } catch (error) {
       context.error('Failed to check for migrations:', error.message);
@@ -357,56 +355,39 @@ async function handleDiffWithDeployed(message, context) {
 
   try {
     const { owner, repo } = parseRepoUrl(process.env.TARGET_REPO_URL);
-    const deployWorkflowFile = process.env.TARGET_DEPLOY_WORKFLOW_FILE || 'deploy.yml';
     const targetBranch = process.env.TARGET_BRANCH || 'main';
 
     context.log(`Diff with deployed: owner=${owner}, repo=${repo}, branch=${targetBranch}`);
 
-    const latestRun = await getLatestSuccessfulWorkflowRun({
-      token: process.env.TARGET_GITHUB_TOKEN,
-      owner,
-      repo,
-      workflowFile: deployWorkflowFile,
-    });
+    const release = await getLatestRelease({ token: process.env.TARGET_GITHUB_TOKEN, owner, repo });
 
-    if (!latestRun || !latestRun.head_commit || (!latestRun.head_commit.sha && !latestRun.head_commit.id)) {
-      context.log(`No valid deployment found: latestRun=${!!latestRun}, head_commit=${!!latestRun?.head_commit}, sha=${latestRun?.head_commit?.sha}, id=${latestRun?.head_commit?.id}`);
+    if (!release) {
       await editOriginalInteractionResponse({
         applicationId,
         token,
-        payload: { content: '❌ No successful deployment runs found with commit information.' },
+        payload: { content: '❌ No published releases found.' },
       });
       return;
     }
 
-    const deployedSha = latestRun.head_commit.sha || latestRun.head_commit.id;
-    const mainSha = await getBranchCommitSha({
-      token: process.env.TARGET_GITHUB_TOKEN,
-      owner,
-      repo,
-      branch: targetBranch,
-    });
-
-    context.log(`Comparing ${deployedSha} to ${mainSha}`);
-
+    // The compare API accepts tag names directly, so no need to resolve the tag to a SHA.
     const commits = await compareCommits({
       token: process.env.TARGET_GITHUB_TOKEN,
       owner,
       repo,
-      base: deployedSha,
-      head: mainSha,
+      base: release.tag_name,
+      head: targetBranch,
     });
 
-    context.log(`Successfully compared ${deployedSha.substring(0, 7)} to ${mainSha.substring(0, 7)}, found ${commits.length} commits`);
+    context.log(`Compared ${release.tag_name} to ${targetBranch}, found ${commits.length} commits`);
 
+    const footer = `\n\n**Deployed release:** [\`${release.tag_name}\`](${release.html_url})\n**Released at:** ${release.published_at}`;
     let content;
     if (commits.length === 0) {
-      content = `✅ Deployed version is up to date with \`${targetBranch}\`.\n\n**Deployed commit:** [\`${deployedSha.substring(0, 7)}\`](https://github.com/${owner}/${repo}/commit/${deployedSha})\n**Deployed message:** ${latestRun.head_commit.message.split('\n')[0]}\n**Deployed at:** ${latestRun.created_at}`;
+      content = `✅ Latest release is up to date with \`${targetBranch}\`.${footer}`;
     } else {
       const commitLines = commits.map(c => `• [\`${c.sha}\`](${c.html_url}) — ${c.message}`);
       const prefix = `🚀 **${commits.length} commit${commits.length === 1 ? '' : 's'} ahead on \`${targetBranch}\`:**\n`;
-      const footer = `\n\n**Deployed commit:** [\`${deployedSha.substring(0, 7)}\`](https://github.com/${owner}/${repo}/commit/${deployedSha})\n**Deployed message:** ${latestRun.head_commit.message.split('\n')[0]}\n**Deployed at:** ${latestRun.created_at}`;
-
       content = fitLines(prefix, commitLines, footer, 'commit');
     }
 

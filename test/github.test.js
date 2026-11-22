@@ -122,3 +122,21 @@ test('listBranches filters the real list-branches response shape', async () => {
     global.fetch = originalFetch;
   }
 });
+
+test('getLatestRelease returns the tag, and null when the repo has no releases', async () => {
+  const { getLatestRelease } = require('../src/github');
+  const original = global.fetch;
+  try {
+    global.fetch = async (url) => {
+      assert.strictEqual(url, 'https://api.github.com/repos/o/r/releases/latest');
+      return { ok: true, status: 200, json: async () => ({ tag_name: 'release-2026.11.21-133332', name: 'n', html_url: 'u', published_at: 't', body: 'x' }) };
+    };
+    assert.deepStrictEqual(await getLatestRelease({ token: 't', owner: 'o', repo: 'r' }), {
+      tag_name: 'release-2026.11.21-133332', name: 'n', html_url: 'u', published_at: 't',
+    });
+    global.fetch = async () => ({ ok: false, status: 404 });
+    assert.strictEqual(await getLatestRelease({ token: 't', owner: 'o', repo: 'r' }), null);
+  } finally {
+    global.fetch = original;
+  }
+});

@@ -145,8 +145,8 @@ test('deploy reports new SQL files as migrations needed', async () => {
     const originalFetch = global.fetch;
     global.fetch = async (url, options) => {
       calls.push({ url, options });
-      if (url.includes('/runs?')) {
-        return { ok: true, json: async () => ({ workflow_runs: [{ id: 1, head_commit: { id: 'abc1234' } }] }) };
+      if (url.includes('/releases/latest')) {
+        return { ok: true, json: async () => ({ tag_name: 'release-1' }) };
       }
       if (url.includes('/compare/')) {
         return { ok: true, json: async () => ({ files: [
@@ -165,7 +165,7 @@ test('deploy reports new SQL files as migrations needed', async () => {
       global.fetch = originalFetch;
     }
 
-    assert.match(calls[1].url, /\/compare\/abc1234\.\.\.main$/);
+    assert.match(calls[1].url, /\/compare\/release-1\.\.\.main$/);
     assert.match(calls[2].url, /\/dispatches$/);
     const content = JSON.parse(calls[3].options.body).content;
     assert.match(content, /Migrations needed/);
